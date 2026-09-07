@@ -1,0 +1,131 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version used for a manual build'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            arch: amd64
+            task: windows:build
+          - runner: ubuntu-latest
+            platform: linux
+            arch: amd64
+            task: linux:build
+          - runner: macos-15
+            platform: darwin
+            arch: arm64
+            task: darwin:package
+          - runner: macos-15-intel
+            platform: darwin
+            arch: amd64
+            task: darwin:package
+
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || (github.event_name == 'workflow_dispatch' && inputs.version || '0.1.0') }}
+      COMMIT: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Install Wails v3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
+
+      - name: Generate build metadata
+        run: go run ./cmd/buildmeta
+
+      - name: Refresh Wails build assets
+        run: wails3 task common:update:build-assets
+
+      - name: Build application
+        run: wails3 task ${{ matrix.task }} ARCH=${{ matrix.arch }}
+
+      - name: Prepare Windows asset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item "bin/edgeinfer-node-test.exe" "release/edgeinfer-node-test-windows-${{ matrix.arch }}.exe"
+
+      - name: Prepare Linux asset
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release
+          cp bin/edgeinfer-node-test release/edgeinfer-node-test-linux-${{ matrix.arch }}
+          chmod +x release/edgeinfer-node-test-linux-${{ matrix.arch }}
+
+      - name: Prepare macOS asset
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent \
+            bin/edgeinfer-node-test.app \
+            release/edgeinfer-node-test-darwin-${{ matrix.arch }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edgeinfer-node-test-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd release
+          sha256sum edgeinfer-node-test-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*
