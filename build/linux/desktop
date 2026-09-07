@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A edgeinfer-node-test application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/edgeinfer-node-test %u
+Terminal=false
+Type=Application
+Icon=edgeinfer-node-test
+Categories=Utility;
+StartupWMClass=edgeinfer-node-test
+
+ 

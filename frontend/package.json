@@ -1,0 +1,37 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "lint": "bun run typecheck && eslint .",
+    "format": "prettier --write . && eslint --fix",
+    "build:dev": "vite build --minify false --mode development",
+    "build": "vite build --mode production",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-router": "^1.170.33",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.3",
+    "lucide-react": "^1.41.0",
+    "@wailsio/runtime": "^3.0.0-beta.17"
+  },
+  "devDependencies": {
+    "@tanstack/eslint-config": "^0.4.0",
+    "@types/node": "^26.4.1",
+    "@tanstack/devtools-vite": "^0.8.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@tanstack/router-plugin": "^1.168.36",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "vite": "^8.2.2",
+    "prettier": "^3.9.6",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "prettier-plugin-tailwindcss": "^0.8.1",
+    "typescript": "^7.0.2"
+  }
+}

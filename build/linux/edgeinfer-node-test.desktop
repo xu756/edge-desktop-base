@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=edgeinfer-node-test
+Exec=edgeinfer-node-test
+Icon=edgeinfer-node-test
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false
