@@ -31,6 +31,7 @@
               git \
               build-essential \
               pkg-config \
+              unzip \
               libgtk-4-dev \
               libwebkitgtk-6.0-dev
             rm -rf /var/lib/apt/lists/*
@@ -39,8 +40,9 @@
             bash /tmp/install-bun.sh
             rm -f /tmp/install-bun.sh
             ln -sf /root/.bun/bin/bun /usr/local/bin/bun
-
-            go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
+            go env -w GO111MODULE=on
+            go env -w  GOPROXY=https://goproxy.cn,direct
+            go install github.com/wailsapp/wails/v3/cmd/wails3@latest
             ln -sf "$(go env GOPATH)/bin/wails3" /usr/local/bin/wails3
 
             go version
