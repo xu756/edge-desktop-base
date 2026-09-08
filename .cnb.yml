@@ -1,0 +1,105 @@
+'v*':
+  tag_push:
+    - name: Release Linux amd64
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 4
+      docker:
+        image: golang:1.25.14-bookworm
+        volumes:
+          - /go/pkg/mod
+          - /root/.cache/go-build
+          - /root/.bun/install/cache
+      stages:
+        - name: Validate release tag
+          script: |
+            set -euo pipefail
+            tag="${CNB_BRANCH}"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo "Invalid release tag: $tag"
+              echo "Expected: v1.2.3 or v1.2.3-beta.1"
+              exit 1
+            fi
+
+        - name: Install build toolchain
+          script: |
+            set -euo pipefail
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              ca-certificates \
+              curl \
+              git \
+              build-essential \
+              pkg-config \
+              libgtk-4-dev \
+              libwebkitgtk-6.0-dev
+            rm -rf /var/lib/apt/lists/*
+
+            curl -fsSL https://bun.sh/install | bash
+            ln -sf /root/.bun/bin/bun /usr/local/bin/bun
+
+            go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
+            ln -sf "$(go env GOPATH)/bin/wails3" /usr/local/bin/wails3
+
+            go version
+            bun --version
+            wails3 version
+
+        - name: Build Linux release assets
+          script: |
+            set -euo pipefail
+
+            export VERSION="${CNB_BRANCH#v}"
+            export COMMIT="${CNB_COMMIT}"
+
+            go run ./cmd/buildmeta -release
+            wails3 task linux:create:deb ARCH=amd64
+
+            APP_NAME="$(sed -n 's/^[[:space:]]*"binaryName":[[:space:]]*"\([^"]*\)".*/\1/p' project/app.json | head -n1)"
+            if [ -z "$APP_NAME" ]; then
+              echo "Unable to resolve binaryName from project/app.json"
+              exit 1
+            fi
+
+            ASSET_PREFIX="${APP_NAME}-${CNB_BRANCH}"
+            mkdir -p release
+
+            cp "bin/${APP_NAME}" "release/${ASSET_PREFIX}-linux-amd64"
+            chmod +x "release/${ASSET_PREFIX}-linux-amd64"
+
+            shopt -s nullglob
+            packages=(bin/*.deb)
+            if [ "${#packages[@]}" -ne 1 ]; then
+              echo "Expected exactly one DEB package, found ${#packages[@]}"
+              exit 1
+            fi
+            cp "${packages[0]}" "release/${ASSET_PREFIX}-linux-amd64.deb"
+
+            (
+              cd release
+              sha256sum -- "${ASSET_PREFIX}-linux-amd64" "${ASSET_PREFIX}-linux-amd64.deb" > SHA256SUMS
+              cat SHA256SUMS
+            )
+
+        - name: Create stable CNB Release
+          if: |
+            ! printf '%s' "$CNB_BRANCH" | grep -q -- '-'
+          type: git:release
+          options:
+            title: $CNB_BRANCH
+            latest: true
+
+        - name: Create prerelease CNB Release
+          if: |
+            printf '%s' "$CNB_BRANCH" | grep -q -- '-'
+          type: git:release
+          options:
+            title: $CNB_BRANCH
+            preRelease: true
+            latest: false
+
+        - name: Upload CNB Release assets
+          image: cnbcool/attachments:latest
+          settings:
+            attachments:
+              - release/*
