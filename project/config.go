@@ -8,6 +8,7 @@ import (
 	"fmt"
 	modsemver "golang.org/x/mod/semver"
 	"net"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -25,14 +26,16 @@ type Config struct {
 	Description          string   `json:"description"`
 	CompanyName          string   `json:"companyName"`
 	Copyright            string   `json:"copyright"`
-	UpdateRepository     string   `json:"updateRepository"`
+	UpdateRepositoryURL  string   `json:"updateRepositoryURL"`
+	UpdateBranch         string   `json:"updateBranch"`
 	DefaultAPIAddress    string   `json:"defaultAPIAddress"`
 	DevVersion           string   `json:"devVersion"`
 }
 
 var slug = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 var identifier = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*(\.[a-zA-Z][a-zA-Z0-9-]*)+$`)
-var repository = regexp.MustCompile(`^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$`)
+var repositorySegment = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+var gitBranch = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$`)
 var semver = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
 
 func Parse(data []byte) (Config, error) {
@@ -59,8 +62,11 @@ func Parse(data []byte) (Config, error) {
 	if !identifier.MatchString(c.Identifier) {
 		return c, fmt.Errorf("invalid identifier")
 	}
-	if !repository.MatchString(c.UpdateRepository) {
-		return c, fmt.Errorf("invalid update repository")
+	if err := validateUpdateRepositoryURL(c.UpdateRepositoryURL); err != nil {
+		return c, err
+	}
+	if !validGitBranch(c.UpdateBranch) {
+		return c, fmt.Errorf("invalid updateBranch: %q", c.UpdateBranch)
 	}
 	if _, err := NumericVersion(c.DevVersion); err != nil {
 		return c, err
@@ -70,6 +76,32 @@ func Parse(data []byte) (Config, error) {
 		return c, fmt.Errorf("defaultAPIAddress must use a loopback IP and port")
 	}
 	return c, nil
+}
+
+func validateUpdateRepositoryURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("updateRepositoryURL must be a public HTTPS CNB repository URL")
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(parts) < 2 {
+		return fmt.Errorf("updateRepositoryURL must include the CNB repository path")
+	}
+	for _, part := range parts {
+		if !repositorySegment.MatchString(part) || part == "." || part == ".." {
+			return fmt.Errorf("invalid CNB repository path segment: %q", part)
+		}
+	}
+	return nil
+}
+
+func validGitBranch(value string) bool {
+	return gitBranch.MatchString(value) &&
+		!strings.Contains(value, "..") &&
+		!strings.Contains(value, "//") &&
+		!strings.HasSuffix(value, "/") &&
+		!strings.HasSuffix(value, ".")
 }
 
 // NumericVersion strips prerelease/build metadata for Windows version resources.
