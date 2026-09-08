@@ -61,7 +61,7 @@
               exit 1
             fi
 
-            ASSET_PREFIX="${APP_NAME}-${CNB_BRANCH}"
+            ASSET_PREFIX="${APP_NAME}"
             mkdir -p release
 
             cp "bin/${APP_NAME}" "release/${ASSET_PREFIX}-linux-amd64"
