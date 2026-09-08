@@ -110,11 +110,11 @@ function Home() {
     setSaving('update')
     try {
       setNotice(state?.updateInstallHint
-        ? '正在检查更新；发现新版本后会自动下载，请按系统提示授权安装…'
+        ? '正在检查更新；发现新版本后会自动下载，请按系统提示授权替换程序…'
         : '正在检查并自动更新…')
       await DesktopService.CheckForUpdates()
       if (state?.updateInstallHint) {
-        setNotice('检查完成；如有新版本，安装完成后应用会自动重启。')
+        setNotice('检查完成；如有新版本，二进制替换后应用会自动重启。')
       }
     } catch (error) {
       setNotice(errorMessage(error))
