@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -166,7 +166,7 @@ jobs:
       - metadata
       - build
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout release tag
@@ -187,19 +187,10 @@ jobs:
           mv ../SHA256SUMS SHA256SUMS
           cat SHA256SUMS
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          fail_on_unmatched_files: true
-          files: release/*
-
-      - name: Publish CNB Release
-        if: ${{ vars.CNB_REPO_SLUG != '' }}
+      - name: Publish CNB distribution
         env:
-          CNB_REPO_SLUG: ${{ vars.CNB_REPO_SLUG }}
+          CNB_REPO_URL: ${{ vars.CNB_REPO_URL }}
           CNB_TARGET_BRANCH: ${{ vars.CNB_TARGET_BRANCH }}
+          CNB_USERNAME: ${{ vars.CNB_USERNAME }}
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
         run: python3 ./scripts/publish-cnb-release.py
