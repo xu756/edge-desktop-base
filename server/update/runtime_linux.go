@@ -3,19 +3,14 @@
 package update
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
-
-	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
 func needsPrivilegedRuntimeUpdate(appName string) bool {
@@ -30,51 +25,16 @@ func privilegedRuntimeUpdateHint(appName string) string {
 	if !needsPrivilegedRuntimeUpdate(appName) {
 		return ""
 	}
-	return "DEB 仅用于首次安装；后续直接更新程序二进制，替换 /usr/bin 时会请求一次系统授权并自动重启。"
+	return "DEB 仅用于首次安装；更新会先下载并校验，点击“重启并应用”时才请求系统授权替换 /usr/bin 中的程序。"
 }
 
-func performPrivilegedRuntimeUpdate(ctx context.Context, provider *cnbProvider, currentVersion, appName string, quit func()) error {
-	release, err := provider.Check(ctx, updater.CheckRequest{
-		CurrentVersion: currentVersion,
-		Platform:       runtime.GOOS,
-		Arch:           runtime.GOARCH,
-	})
-	if err != nil || release == nil {
-		return err
-	}
-	if release.Verification == nil || release.Verification.DigestAlgo != "sha256" || len(release.Verification.Digest) != sha256.Size {
-		return fmt.Errorf("cnb: release %s is missing SHA-256 verification", release.Version)
-	}
-
-	stagingDir, err := os.MkdirTemp("", appName+"-update-*")
+func applyPrivilegedRuntimeUpdate(ctx context.Context, stagedPath, appName string, quit func()) error {
+	info, err := os.Stat(stagedPath)
 	if err != nil {
-		return fmt.Errorf("create update staging directory: %w", err)
+		return fmt.Errorf("stat staged runtime: %w", err)
 	}
-	defer os.RemoveAll(stagingDir)
-
-	staged := filepath.Join(stagingDir, release.Artifact.Filename)
-	file, err := os.OpenFile(staged, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
-	if err != nil {
-		return fmt.Errorf("create staged runtime: %w", err)
-	}
-	hash := sha256.New()
-	downloadErr := provider.Download(ctx, release, io.MultiWriter(file, hash), nil)
-	syncErr := file.Sync()
-	closeErr := file.Close()
-	if downloadErr != nil {
-		return downloadErr
-	}
-	if syncErr != nil {
-		return syncErr
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if !bytes.Equal(hash.Sum(nil), release.Verification.Digest) {
-		return fmt.Errorf("cnb: SHA-256 verification failed for %s", release.Artifact.Filename)
-	}
-	if err := os.Chmod(staged, 0o755); err != nil {
-		return fmt.Errorf("chmod staged runtime: %w", err)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("staged runtime is not a regular file: %s", stagedPath)
 	}
 
 	target, err := os.Executable()
@@ -95,8 +55,10 @@ func performPrivilegedRuntimeUpdate(ctx context.Context, provider *cnbProvider, 
 		return fmt.Errorf("mv command not found: %w", err)
 	}
 
-	// Write beside the target first, then atomically rename over the running
-	// executable. Linux keeps the old inode alive for the current process.
+	// Wails already downloaded and verified stagedPath. Copy it beside the
+	// target and atomically rename it over the running executable. Linux keeps
+	// the old inode alive until this process exits, so the restart sees the new
+	// runtime without writing into the currently mapped binary.
 	script := "set -eu\n" +
 		"src=\"$1\"\n" +
 		"dst=\"$2\"\n" +
@@ -108,7 +70,7 @@ func performPrivilegedRuntimeUpdate(ctx context.Context, provider *cnbProvider, 
 		"\"$mv_tool\" -f \"$tmp\" \"$dst\"\n" +
 		"trap - EXIT"
 
-	args := []string{"/bin/sh", "-c", script, "update-runtime", staged, target, installTool, mvTool}
+	args := []string{"/bin/sh", "-c", script, "update-runtime", stagedPath, target, installTool, mvTool}
 	var cmd *exec.Cmd
 	if os.Geteuid() == 0 {
 		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
@@ -123,6 +85,13 @@ func performPrivilegedRuntimeUpdate(ctx context.Context, provider *cnbProvider, 
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("replace runtime binary: %w", err)
+	}
+
+	// Clean Wails' staging directory after the privileged copy. Restrict the
+	// cleanup to the updater's own temp-directory naming convention.
+	stagingDir := filepath.Dir(stagedPath)
+	if strings.HasPrefix(filepath.Base(stagingDir), "wails-update-") {
+		_ = os.RemoveAll(stagingDir)
 	}
 
 	if err := scheduleRuntimeRestart(target); err != nil {
