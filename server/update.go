@@ -19,7 +19,7 @@ var updaterWindowHTML string
 
 func (s *Server) updateInterval() time.Duration {
 	cfg := s.Settings.Get()
-	if !cfg.AutoCheckUpdates || updateInstallHint() != "" {
+	if !cfg.AutoCheckUpdates {
 		return 0
 	}
 	return time.Duration(cfg.UpdateIntervalHours) * time.Hour
@@ -34,10 +34,17 @@ func (s *Server) StartUpdateCfg() error {
 	if err != nil {
 		return err
 	}
-	return s.App.Updater.Init(updater.Config{
+	interval := s.updateInterval()
+	wailsInterval := interval
+	if updateInstallHint() != "" {
+		// System-installed DEB/PKG builds use their package manager instead of
+		// Wails' binary swap, but still keep the same configured polling interval.
+		wailsInterval = 0
+	}
+	if err := s.App.Updater.Init(updater.Config{
 		CurrentVersion: Version,
 		Providers:      []updater.Provider{provider},
-		CheckInterval:  s.updateInterval(),
+		CheckInterval:  wailsInterval,
 		Window: &updater.BuiltinWindow{
 			HTML: strings.ReplaceAll(updaterWindowHTML, "{{APP_NAME}}", html.EscapeString(AppName)),
 			Options: updater.WindowOptions{
@@ -48,7 +55,77 @@ func (s *Server) StartUpdateCfg() error {
 				DisableResize: false,
 			},
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	if updateInstallHint() != "" && interval > 0 {
+		go s.systemPackageUpdateLoop(interval)
+	}
+	return nil
+}
+
+func (s *Server) systemPackageUpdateLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		if s.quitting.Load() {
+			return
+		}
+		if !s.updating.CompareAndSwap(false, true) {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		err := s.installLatestSystemPackage(ctx)
+		cancel()
+		s.updating.Store(false)
+		if err != nil && s.App != nil {
+			s.App.Logger.Error("automatic system update", "error", err)
+		}
+		if s.quitting.Load() {
+			return
+		}
+	}
+}
+
+func (s *Server) installLatestSystemPackage(ctx context.Context) error {
+	provider, err := configuredCNBProvider()
+	if err != nil {
+		return err
+	}
+	update, err := provider.checkInstallerUpdate(ctx, Version, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
+	}
+	if update == nil {
+		return nil
+	}
+
+	path, err := provider.downloadInstaller(ctx, update)
+	if err != nil {
+		return err
+	}
+	removeInstaller := true
+	defer func() {
+		if removeInstaller {
+			_ = os.Remove(path)
+		}
+	}()
+
+	if err := installSystemPackage(path); err != nil {
+		return err
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := scheduleSystemAppRestart(executable); err != nil {
+		return err
+	}
+	_ = os.Remove(path)
+	removeInstaller = false
+	s.Quit()
+	return nil
 }
 
 func (s *Server) CheckForUpdates() error {
@@ -61,35 +138,14 @@ func (s *Server) CheckForUpdates() error {
 			return errors.New("更新流程正在进行")
 		}
 		defer s.updating.Store(false)
-
-		provider, err := configuredCNBProvider()
-		if err != nil {
-			return err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-
-		update, err := provider.checkInstallerUpdate(ctx, Version, runtime.GOOS, runtime.GOARCH)
-		if err != nil {
-			return err
-		}
-		if update == nil {
-			return nil
-		}
-		path, err := provider.downloadInstaller(ctx, update)
-		if err != nil {
-			return err
-		}
-		if err := launchSystemInstaller(runtime.GOOS, path); err != nil {
-			return err
-		}
-		return nil
+		return s.installLatestSystemPackage(ctx)
 	}
 
 	if !s.updating.CompareAndSwap(false, true) {
 		return errors.New("更新流程正在进行，请查看更新窗口")
 	}
-
 	go func() {
 		defer s.updating.Store(false)
 		if err := s.App.Updater.CheckAndInstall(context.Background()); err != nil {
@@ -107,15 +163,13 @@ func updateInstallHint() string {
 	return systemInstallHint(runtime.GOOS, executable, appConfig.BinaryName)
 }
 
-// System installers own these paths. The app downloads the matching installer
-// from CNB and launches the native package installer instead of opening a web page.
 func systemInstallHint(platform, executable, binaryName string) string {
 	executable = filepath.ToSlash(executable)
 	if platform == "linux" && executable == "/usr/bin/"+binaryName {
-		return "通过 DEB 安装；发现新版本后将直接下载 .deb 并打开系统安装器。"
+		return "DEB 安装版；发现新版本后会自动下载、请求系统授权、安装并重启应用。"
 	}
 	if platform == "darwin" && strings.HasPrefix(executable, "/Applications/") && strings.Contains(executable, ".app/Contents/MacOS/") {
-		return "安装在 Applications；发现新版本后将直接下载 .pkg 并打开系统安装器。"
+		return "PKG 安装版；发现新版本后会自动下载、请求系统授权、安装并重启应用。"
 	}
 	return ""
 }
