@@ -3,9 +3,10 @@ package server
 import (
 	"errors"
 	"fmt"
-	"github.com/wailsapp/wails/v3/pkg/application"
 	"runtime"
 	"sync"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type DesktopState struct {
@@ -59,7 +60,7 @@ func (s *DesktopService) State() (DesktopState, error) {
 		CloseToTray:              s.server.Settings.Get().CloseToTray,
 		TrayReady:                s.server.Tray != nil,
 		UpdateRepositoryURL:      UpdateRepositoryURL,
-		UpdateInstallHint:        updateInstallHint(),
+		UpdateInstallHint:        s.server.updateInstallHint(),
 		UpdateIntervalHours:      int(s.server.updateInterval().Hours()),
 		LocalServer:              s.server.LocalServer.Status(),
 		WebSocketURL:             s.server.LocalServer.WebSocketURL(),
