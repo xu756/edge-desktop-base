@@ -36,18 +36,8 @@ func installSystemPackage(path string) error {
 
 func scheduleSystemAppRestart(executable string) error {
 	pid := strconv.Itoa(os.Getpid())
-	cmd := exec.Command(
-		"/bin/sh", "-c",
-		`pid="$1"`,
-		"restart-app", pid, executable,
-	)
-	_ = cmd
-
-	cmd = exec.Command(
-		"/bin/sh", "-c",
-		`pid="$1"; app="$2"; while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done; exec "$app" >/dev/null 2>&1`,
-		"restart-app", pid, executable,
-	)
+	script := "pid=\"$1\"; app=\"$2\"; while kill -0 \"$pid\" 2>/dev/null; do sleep 0.2; done; exec \"$app\" >/dev/null 2>&1"
+	cmd := exec.Command("/bin/sh", "-c", script, "restart-app", pid, executable)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("schedule app restart: %w", err)
