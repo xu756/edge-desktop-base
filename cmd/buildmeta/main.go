@@ -132,7 +132,7 @@ func generate(c project.Config, release bool) error {
 		if err != nil {
 			return err
 		}
-		_, err = fmt.Fprintf(f, "APP_NAME=%s\nASSET_PREFIX=%s-v%s\n", c.BinaryName, c.BinaryName, version)
+		_, err = fmt.Fprintf(f, "APP_NAME=%s\nASSET_PREFIX=%s\n", c.BinaryName, c.BinaryName)
 		closeErr := f.Close()
 		if err != nil {
 			return err
