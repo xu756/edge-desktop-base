@@ -53,8 +53,9 @@ function Home() {
     const subscriptions = [
       Events.On('wails:updater:check-started', () => setNotice('正在检查更新…')),
       Events.On('wails:updater:no-update', () => setNotice('当前已是最新版本')),
-      Events.On('wails:updater:update-available', () => setNotice('发现新版本，正在下载并安装…')),
-      Events.On('wails:updater:update-ready', () => setNotice('更新已安装，正在重启应用…')),
+      Events.On('wails:updater:update-available', () => setNotice('发现新版本，可打开更新窗口查看详情')),
+      Events.On('wails:updater:download-started', () => setNotice('正在下载更新…')),
+      Events.On('wails:updater:update-ready', () => setNotice('更新已下载并校验，重启应用后生效')),
       Events.On('wails:updater:error', (event) => {
         const data = event.data as { message?: string } | undefined
         setNotice(`更新失败：${data?.message ?? '请查看更新窗口'}`)
@@ -106,16 +107,37 @@ function Home() {
     }
   }
 
+  const setAutoCheckUpdates = async (enabled: boolean) => {
+    setSaving('auto-check-updates')
+    try {
+      await DesktopService.SetAutoCheckUpdates(enabled)
+      await refresh()
+      setNotice(enabled ? '已开启自动检查更新' : '已关闭自动检查更新')
+    } catch (error) {
+      setNotice(errorMessage(error))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const setAutoDownloadUpdates = async (enabled: boolean) => {
+    setSaving('auto-download-updates')
+    try {
+      await DesktopService.SetAutoDownloadUpdates(enabled)
+      await refresh()
+      setNotice(enabled ? '发现新版本后将自动下载，但不会自动重启' : '发现新版本后只提醒，不自动下载')
+    } catch (error) {
+      setNotice(errorMessage(error))
+    } finally {
+      setSaving(null)
+    }
+  }
+
   const checkUpdate = async () => {
     setSaving('update')
     try {
-      setNotice(state?.updateInstallHint
-        ? '正在检查更新；发现新版本后会自动下载，请按系统提示授权替换程序…'
-        : '正在检查并自动更新…')
+      setNotice('正在打开更新窗口…')
       await DesktopService.CheckForUpdates()
-      if (state?.updateInstallHint) {
-        setNotice('检查完成；如有新版本，二进制替换后应用会自动重启。')
-      }
     } catch (error) {
       setNotice(errorMessage(error))
     } finally {
@@ -216,13 +238,27 @@ function Home() {
           <CardHeader>
             <CardTitle className='flex items-center gap-2'>
               <Download className='size-4' />
-              自动更新
+              软件更新
             </CardTitle>
-            <CardDescription>{state?.updateInstallHint || 'CNB 公共分发仓库 + SHA-256 校验；更新完成后自动重启。'}</CardDescription>
+            <CardDescription>{state?.updateInstallHint || 'CNB 公共分发仓库 + SHA-256 校验；下载完成后由你决定何时重启。'}</CardDescription>
           </CardHeader>
           <CardContent>
+            <SettingRow
+              title='自动检查更新'
+              description={`每 ${state?.updateIntervalHours ?? 6} 小时在后台检查新版本，不主动弹窗。`}
+              checked={state?.autoCheckUpdates ?? true}
+              disabled={loading || saving !== null || !!state?.configError}
+              onCheckedChange={setAutoCheckUpdates}
+            />
+            <SettingRow
+              title='自动下载更新'
+              description='发现新版本后在后台下载并校验；下载完成后不会自动重启。'
+              checked={state?.autoDownloadUpdates ?? false}
+              disabled={loading || saving !== null || !!state?.configError || state?.autoCheckUpdates === false}
+              onCheckedChange={setAutoDownloadUpdates}
+            />
             <InfoRow label='当前版本' value={state ? `v${state.version}` : '-'} />
-            <InfoRow label='自动检查' value={state ? (state.updateIntervalHours > 0 ? `每 ${state.updateIntervalHours} 小时` : '已关闭') : '-'} />
+            <InfoRow label='检查间隔' value={state ? `${state.updateIntervalHours} 小时` : '-'} />
             <InfoRow label='更新源' value={state?.updateRepositoryURL ?? '-'} />
             <Button onClick={checkUpdate} disabled={loading || saving !== null} className='w-fit'>
               {saving === 'update' ? (
@@ -230,7 +266,7 @@ function Home() {
               ) : (
                 <RefreshCw data-icon='inline-start' />
               )}
-              检查并自动更新
+              检查更新
             </Button>
           </CardContent>
         </Card>
