@@ -1,18 +1,20 @@
 package server
 
 import (
+	"testing"
+
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	gh "github.com/wailsapp/wails/v3/pkg/updater/providers/github"
-	"testing"
 )
 
 func TestUpdateAssetSelection(t *testing.T) {
-	prefix := appConfig.BinaryName + "-v1.2.3"
+	prefix := appConfig.BinaryName
 	assets := []gh.ReleaseAsset{
 		{Name: prefix + "-windows-amd64-installer.exe"},
 		{Name: prefix + "-windows-arm64.exe"},
 		{Name: prefix + "-windows-amd64.exe.sig"},
-		{Name: "another-app-v1.2.3-windows-amd64.exe"},
+		{Name: prefix + "-v1.2.3-windows-amd64.exe"},
+		{Name: "another-app-windows-amd64.exe"},
 		{Name: prefix + "-windows-amd64.exe"},
 		{Name: prefix + "-darwin-arm64.zip"},
 		{Name: prefix + "-linux-amd64"},
@@ -23,20 +25,20 @@ func TestUpdateAssetSelection(t *testing.T) {
 		platform, arch string
 		want           int
 	}{
-		{"windows", "amd64", 4}, {"darwin", "arm64", 5}, {"linux", "amd64", 6}, {"linux", "arm64", -1},
+		{"windows", "amd64", 5}, {"darwin", "arm64", 6}, {"linux", "amd64", 7}, {"linux", "arm64", -1},
 	} {
 		got := matchUpdateAsset(updater.CheckRequest{Platform: tc.platform, Arch: tc.arch}, assets)
 		if got != tc.want {
 			t.Fatalf("%s/%s: %d != %d", tc.platform, tc.arch, got, tc.want)
 		}
 	}
-	if got := matchUpdateAsset(updater.CheckRequest{Platform: "windows", Arch: "amd64"}, assets[:4]); got != -1 {
-		t.Fatal("selected an installer or unrelated asset")
+	if got := matchUpdateAsset(updater.CheckRequest{Platform: "windows", Arch: "amd64"}, assets[:5]); got != -1 {
+		t.Fatal("selected an installer, sidecar, legacy versioned asset, or unrelated asset")
 	}
 }
 
 func TestOnlySystemInstallersAreNotUpdatePayloads(t *testing.T) {
-	prefix := appConfig.BinaryName + "-v1.2.3"
+	prefix := appConfig.BinaryName
 	for _, tc := range []struct{ platform, arch, ext string }{
 		{"linux", "amd64", ".deb"}, {"darwin", "arm64", ".pkg"},
 	} {
