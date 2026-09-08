@@ -46,13 +46,17 @@ func applyPrivilegedRuntimeUpdate(ctx context.Context, stagedPath, appName strin
 		return fmt.Errorf("refusing privileged runtime swap for unexpected target %q", target)
 	}
 
-	installTool, err := exec.LookPath("install")
+	shellPath, err := firstSystemTool("/bin/sh", "/usr/bin/sh")
 	if err != nil {
-		return fmt.Errorf("install command not found: %w", err)
+		return err
 	}
-	mvTool, err := exec.LookPath("mv")
+	installPath, err := firstSystemTool("/usr/bin/install", "/bin/install")
 	if err != nil {
-		return fmt.Errorf("mv command not found: %w", err)
+		return err
+	}
+	mvPath, err := firstSystemTool("/usr/bin/mv", "/bin/mv")
+	if err != nil {
+		return err
 	}
 
 	// Wails already downloaded and verified stagedPath. Copy it beside the
@@ -70,16 +74,16 @@ func applyPrivilegedRuntimeUpdate(ctx context.Context, stagedPath, appName strin
 		"\"$mv_tool\" -f \"$tmp\" \"$dst\"\n" +
 		"trap - EXIT"
 
-	args := []string{"/bin/sh", "-c", script, "update-runtime", stagedPath, target, installTool, mvTool}
+	args := []string{shellPath, "-c", script, "update-runtime", stagedPath, target, installPath, mvPath}
 	var cmd *exec.Cmd
 	if os.Geteuid() == 0 {
 		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
 	} else {
-		pkexec, err := exec.LookPath("pkexec")
+		pkexecPath, err := firstSystemTool("/usr/bin/pkexec", "/bin/pkexec")
 		if err != nil {
-			return fmt.Errorf("pkexec not found; PolicyKit is required to update %s: %w", target, err)
+			return fmt.Errorf("PolicyKit is required to update %s: %w", target, err)
 		}
-		cmd = exec.CommandContext(ctx, pkexec, args...)
+		cmd = exec.CommandContext(ctx, pkexecPath, args...)
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -101,6 +105,16 @@ func applyPrivilegedRuntimeUpdate(ctx context.Context, stagedPath, appName strin
 		quit()
 	}
 	return nil
+}
+
+func firstSystemTool(paths ...string) (string, error) {
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("required system tool not found: %s", strings.Join(paths, ", "))
 }
 
 func scheduleRuntimeRestart(executable string) error {
