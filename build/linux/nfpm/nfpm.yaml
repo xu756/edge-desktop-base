@@ -25,7 +25,7 @@ contents:
     dst: "/usr/share/icons/hicolor/128x128/apps/edgeinfer-node-test.png"
     file_info:
       mode: 0644
-  - src: "./build/linux/edgeinfer-node-test.desktop"
+  - src: "./build/linux/desktop"
     dst: "/usr/share/applications/edgeinfer-node-test.desktop"
     file_info:
       mode: 0644
