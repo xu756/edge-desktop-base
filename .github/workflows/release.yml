@@ -26,6 +26,7 @@ jobs:
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           tag="${GITHUB_REF_NAME}"
           if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $tag"
@@ -120,14 +121,17 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release
           cp "bin/${APP_NAME}" "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
           chmod +x "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
 
-      - name: Prepare Ubuntu installer
+      - name: Prepare Linux DEB installer
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          set -euo pipefail
+          shopt -s nullglob
           packages=(bin/*.deb)
           test "${#packages[@]}" -eq 1
           cp "${packages[0]}" "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}.deb"
@@ -136,6 +140,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p release
           ditto -c -k --sequesterRsrc --keepParent \
             "bin/${APP_NAME}.app" \
@@ -145,6 +150,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
+          set -euo pipefail
           cp "bin/${APP_NAME}-${{ matrix.arch }}.pkg" "release/${ASSET_PREFIX}-darwin-${{ matrix.arch }}.pkg"
 
       - name: Upload build artifact
@@ -153,12 +159,14 @@ jobs:
           name: ${{ env.ASSET_PREFIX }}-${{ matrix.platform }}-${{ matrix.arch }}
           path: release/*
           if-no-files-found: error
+          retention-days: 1
 
   release:
     needs:
       - metadata
       - build
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
       - name: Download build artifacts
@@ -170,6 +178,7 @@ jobs:
       - name: Generate SHA256SUMS
         shell: bash
         run: |
+          set -euo pipefail
           cd release
           sha256sum -- * > ../SHA256SUMS
           mv ../SHA256SUMS SHA256SUMS
