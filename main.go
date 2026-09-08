@@ -3,23 +3,21 @@ package main
 import (
 	"changeme/server"
 	"embed"
-	"fmt"
+	"log"
 )
-
-const currentVersion = "0.0.1"
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
-	server := server.New(currentVersion)
-	if err := server.Init(assets); err != nil {
-
-		server.App.Logger.Error(fmt.Sprintf("Server.Init: %v", err))
+	s := server.New()
+	if err := s.Init(assets, appIcon); err != nil {
+		log.Fatal(err)
 	}
-
-	if err := server.Start(); err != nil {
-		server.App.Logger.Error(fmt.Sprintf("Server.Start: %v", err))
+	if err := s.Start(); err != nil {
+		log.Fatal(err)
 	}
-
 }

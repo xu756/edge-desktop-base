@@ -1,10 +1,11 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3000",
+    "typecheck": "tsc --noEmit",
     "lint": "bun run typecheck && eslint .",
     "format": "prettier --write . && eslint --fix",
     "build:dev": "vite build --minify false --mode development",
@@ -20,6 +21,8 @@
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "lucide-react": "^1.41.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "shadcn": "^4.21.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
@@ -27,17 +30,17 @@
   },
   "devDependencies": {
     "@tanstack/eslint-config": "^0.4.0",
-    "@types/node": "^26.4.1",
     "@tanstack/devtools-vite": "^0.8.5",
+    "@tanstack/router-plugin": "^1.168.36",
+    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@tanstack/router-plugin": "^1.168.36",
     "@vitejs/plugin-react": "^6.1.1",
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "vite": "^8.2.2",
     "prettier": "^3.9.6",
     "prettier-plugin-organize-imports": "^4.3.0",
     "prettier-plugin-tailwindcss": "^0.8.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   }
 }

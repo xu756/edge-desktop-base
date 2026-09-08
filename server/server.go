@@ -1,60 +1,74 @@
 package server
 
 import (
-	"changeme/server/service"
 	"embed"
+	"errors"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 type Server struct {
-	App     *application.App
-	Version string
+	App            *application.App
+	MainWindow     *application.WebviewWindow
+	Tray           *application.SystemTray
+	Settings       *SettingsStore
+	LocalServer    *LocalServer
+	DesktopService *DesktopService
+
+	quitting atomic.Bool
+	updating atomic.Bool
 }
 
-func New(version string) *Server {
-	return &Server{
-		Version: version,
-	}
+func New() *Server {
+	return &Server{}
 }
 
-func (s *Server) Init(assets embed.FS) error {
+func (s *Server) Init(assets embed.FS, icon []byte) error {
+	s.Settings = NewSettingsStore()
+	s.LocalServer = NewLocalServer(DefaultAPIAddress)
+	s.DesktopService = NewDesktopService(s)
 
-	app := application.New(application.Options{
-		Name:        "edgeinfer-node-test",
-		Description: "A demo of using raw HTML & CSS",
-		Services: []application.Service{
-			application.NewService(&service.Service{}),
-		},
+	s.App = application.New(application.Options{
+		Name:        AppName,
+		Description: AppDescription,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
+		Services: []application.Service{
+			application.NewService(s.LocalServer),
+			application.NewService(s.DesktopService),
+		},
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: AppIdentifier,
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				s.ShowMainWindow()
+			},
+		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
-	s.App = app
-	// 设置菜单
-	s.SetMenu()
 
-	// 启动一个窗口
-	s.NewWindow(application.WebviewWindowOptions{
-		Title: "推理服务器测试程序",
-		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
-		Width:  1000,
-		Height: 618,
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
-		},
-		URL: "/",
-	})
+	if err := s.StartUpdateCfg(); err != nil {
+		return err
+	}
 
-	// 启动更新程序
-	return s.StartUpdateCfg()
+	s.NewMainWindow()
+	s.SetTray(icon)
+	return nil
 }
 
 func (s *Server) Start() error {
+	if s.App == nil {
+		return errors.New("application is not initialised")
+	}
 	return s.App.Run()
+}
+
+func (s *Server) Quit() {
+	s.quitting.Store(true)
+	if s.App != nil {
+		s.App.Quit()
+	}
 }

@@ -127,4 +127,28 @@
   html {
     @apply font-sans;
     }
+
+  html,
+  body,
+  #app {
+    --wails-draggable: no-drag;
+  }
+
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  img,
+  a,
+  button {
+    -webkit-user-drag: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }

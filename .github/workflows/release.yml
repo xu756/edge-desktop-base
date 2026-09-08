@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  WAILS_VERSION: v3.0.0-beta.17
+  APP_NAME: edgeinfer-node-test
+
+jobs:
+  metadata:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Validate release tag
+        id: version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag"
+            echo "Expected: v1.2.3 or v1.2.3-beta.1"
+            exit 1
+          fi
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: metadata
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            platform: windows
+            arch: amd64
+            task: windows:build
+          - runner: ubuntu-24.04
+            platform: linux
+            arch: amd64
+            task: linux:build
+          - runner: macos-15
+            platform: darwin
+            arch: arm64
+            task: darwin:package
+          - runner: macos-15-intel
+            platform: darwin
+            arch: amd64
+            task: darwin:package
+
+    runs-on: ${{ matrix.runner }}
+    env:
+      VERSION: ${{ needs.metadata.outputs.version }}
+      COMMIT: ${{ github.sha }}
+      ASSET_PREFIX: edgeinfer-node-test-${{ github.ref_name }}
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+
+      - name: Install Wails v3
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
+
+      - name: Generate version metadata from tag
+        run: go run ./cmd/buildmeta
+
+      - name: Refresh Wails build assets
+        run: wails3 task common:update:build-assets
+
+      - name: Build application
+        run: wails3 task ${{ matrix.task }} ARCH=${{ matrix.arch }}
+
+      - name: Prepare Windows updater asset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item "bin/edgeinfer-node-test.exe" "release/$env:ASSET_PREFIX-windows-${{ matrix.arch }}.exe"
+
+      - name: Prepare Linux updater asset
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p release
+          cp bin/edgeinfer-node-test "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
+          chmod +x "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
+
+      - name: Prepare macOS updater asset
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent \
+            bin/edgeinfer-node-test.app \
+            "release/${ASSET_PREFIX}-darwin-${{ matrix.arch }}.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET_PREFIX }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    needs:
+      - metadata
+      - build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd release
+          sha256sum edgeinfer-node-test-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: release/*
