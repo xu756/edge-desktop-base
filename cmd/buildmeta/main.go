@@ -154,7 +154,7 @@ func generate(c project.Config, release bool) error {
 		return err
 	}
 
-	for key, value := range map[string]string{"name": c.BinaryName, "version": version, "description": c.Description, "vendor": c.CompanyName, "maintainer": c.CompanyName, "homepage": "https://github.com/" + c.UpdateRepository} {
+	for key, value := range map[string]string{"name": c.BinaryName, "version": version, "description": c.Description, "vendor": c.CompanyName, "maintainer": c.CompanyName, "homepage": c.UpdateRepositoryURL} {
 		if err = replace("build/linux/nfpm/nfpm.yaml", `(?m)^`+key+`: "[^"]*"`, fmt.Sprintf("%s: %q", key, value)); err != nil {
 			return err
 		}
@@ -168,8 +168,8 @@ func generate(c project.Config, release bool) error {
 		return err
 	}
 
-	// GitHub Actions consumes the same validated binary name as Taskfile and
-	// packaging metadata. Version intentionally stays in the release/tag only.
+	// CI consumes the same validated binary name as Taskfile and packaging
+	// metadata. Version intentionally stays in the release/tag only.
 	if path := os.Getenv("GITHUB_ENV"); path != "" {
 		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
