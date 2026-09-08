@@ -15,42 +15,34 @@ type Config struct {
 	RepositoryURL string
 	Branch        string
 	AppName       string
-	CurrentVersion string
 	HTTPClient    *http.Client
 }
 
 // Manager owns the update source and the small amount of platform-specific
 // runtime replacement needed by system-installed builds.
 type Manager struct {
-	provider       *cnbProvider
-	appName        string
-	currentVersion string
+	provider *cnbProvider
+	appName  string
 }
 
 func NewManager(cfg Config) (*Manager, error) {
-	if cfg.CurrentVersion == "" {
-		return nil, errors.New("update: current version is required")
-	}
 	provider, err := newCNBProvider(cfg.RepositoryURL, cfg.Branch, cfg.AppName, cfg.HTTPClient)
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{
-		provider:       provider,
-		appName:        cfg.AppName,
-		currentVersion: cfg.CurrentVersion,
-	}, nil
+	return &Manager{provider: provider, appName: cfg.AppName}, nil
 }
 
 // Provider exposes the CNB source through Wails' generic updater.Provider
-// interface. Wails remains responsible for the normal writable-path update
-// lifecycle (download, stage, swap and restart).
+// interface. Wails is responsible for Check and DownloadAndInstall on every
+// platform, including SHA-256 verification and staging.
 func (m *Manager) Provider() updater.Provider {
 	return m.provider
 }
 
-// NeedsPrivilegedRuntimeUpdate reports whether the current executable lives in
-// a system-owned path that Wails cannot replace as the desktop user.
+// NeedsPrivilegedRuntimeUpdate reports whether applying the staged runtime
+// requires elevated permissions. The update may still be downloaded and
+// verified without privileges.
 func (m *Manager) NeedsPrivilegedRuntimeUpdate() bool {
 	return needsPrivilegedRuntimeUpdate(m.appName)
 }
@@ -61,12 +53,15 @@ func (m *Manager) InstallHint() string {
 	return privilegedRuntimeUpdateHint(m.appName)
 }
 
-// PerformPrivilegedRuntimeUpdate downloads the same runtime artifact exposed
-// by Provider(), verifies it, performs the minimal privileged swap and then
-// asks the caller to quit so the new binary can be relaunched.
-func (m *Manager) PerformPrivilegedRuntimeUpdate(ctx context.Context, quit func()) error {
+// ApplyStagedRuntimeUpdate applies an artifact that Wails already downloaded
+// and verified. This is only needed for system-owned runtime locations such as
+// /usr/bin on Linux; normal writable installs use updater.Restart directly.
+func (m *Manager) ApplyStagedRuntimeUpdate(ctx context.Context, stagedPath string, quit func()) error {
 	if !m.NeedsPrivilegedRuntimeUpdate() {
 		return errors.New("update: privileged runtime update is not required")
 	}
-	return performPrivilegedRuntimeUpdate(ctx, m.provider, m.currentVersion, m.appName, quit)
+	if stagedPath == "" {
+		return errors.New("update: staged runtime path is empty")
+	}
+	return applyPrivilegedRuntimeUpdate(ctx, stagedPath, m.appName, quit)
 }
