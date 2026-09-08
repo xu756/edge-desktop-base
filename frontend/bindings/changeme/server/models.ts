@@ -16,6 +16,8 @@ export interface DesktopState {
     "autoStartError"?: string;
     "closeToTray": boolean;
     "trayReady": boolean;
+    "autoCheckUpdates": boolean;
+    "autoDownloadUpdates": boolean;
     "updateRepositoryURL": string;
     "updateInstallHint"?: string;
     "updateIntervalHours": number;
