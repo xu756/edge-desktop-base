@@ -17,6 +17,7 @@
 - WebSocket 仅允许 Wails/loopback 页面 Origin，并限制单条消息大小为 1 MiB
 - WebView 内容区域默认禁止 HTML 拖拽和文本拖选；原生系统标题栏仍可正常移动窗口
 - GitHub Actions 只在发布 `v*` tag 时构建 Windows/Linux/macOS 并创建 Release
+- CNB 通过根目录 `.cnb.yml` 在 `v*` tag 时构建 Linux amd64 并创建 CNB Release
 
 ## 开发
 
@@ -62,33 +63,43 @@ git push origin v0.3.0-beta.1
 
 构建时会直接读取 tag：`v0.2.0` 会注入为应用版本 `0.2.0`，同时同步到 Wails `build/config.yml`、Windows 版本资源、NSIS 元信息、macOS plist 和 Linux nfpm 元信息。运行时版本不带前导 `v`，与 Wails GitHub updater 的版本规则一致。
 
-当前 Actions 自动发布目标：
+版本号只由 Git Tag、Release 和应用/安装包元数据表达，发布文件名保持固定，不重复包含版本号。这样不同版本的下载路径结构、自动化脚本和 updater asset matcher 都保持稳定。
+
+当前 GitHub Actions 自动发布目标：
 
 - Windows amd64：应用更新 EXE + 用户级 NSIS installer
 - Linux amd64：应用更新二进制 + DEB installer
 - macOS arm64：应用更新 ZIP + PKG installer
 - macOS amd64：Task 已支持，但 Actions matrix 当前暂时注释，不自动发布
 
-以 `v0.2.0` 为例，当前自动发布的 Release 资产为：
+每个正式 Release 使用固定资产名：
 
 ```text
-edgeinfer-node-test-v0.2.0-windows-amd64.exe
-edgeinfer-node-test-v0.2.0-windows-amd64-installer.exe
-edgeinfer-node-test-v0.2.0-linux-amd64
-edgeinfer-node-test-v0.2.0-linux-amd64.deb
-edgeinfer-node-test-v0.2.0-darwin-arm64.zip
-edgeinfer-node-test-v0.2.0-darwin-arm64.pkg
+edgeinfer-node-test-windows-amd64.exe
+edgeinfer-node-test-windows-amd64-installer.exe
+edgeinfer-node-test-linux-amd64
+edgeinfer-node-test-linux-amd64.deb
+edgeinfer-node-test-darwin-arm64.zip
+edgeinfer-node-test-darwin-arm64.pkg
 SHA256SUMS
 ```
 
 如果以后重新启用 macOS Intel matrix，还会额外发布：
 
 ```text
-edgeinfer-node-test-v0.2.0-darwin-amd64.zip
-edgeinfer-node-test-v0.2.0-darwin-amd64.pkg
+edgeinfer-node-test-darwin-amd64.zip
+edgeinfer-node-test-darwin-amd64.pkg
 ```
 
-更新器严格匹配 `<binaryName>-v<版本>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名），排除安装包、签名等附件，并使用同一 Release 中的 `SHA256SUMS` 校验下载内容。
+CNB 使用同样的固定命名规则，目前公共 CNB Runner 构建 Linux amd64：
+
+```text
+edgeinfer-node-test-linux-amd64
+edgeinfer-node-test-linux-amd64.deb
+SHA256SUMS
+```
+
+更新器严格精确匹配 `<binaryName>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名）。版本判断来自 GitHub Release Tag，而不是文件名；安装包、旧版带版本号资产、签名和其他附件都不会被选为自动更新 payload。下载内容继续使用同一 Release 中的 `SHA256SUMS` 校验。
 
 生产发布前建议补 Windows Authenticode 与 macOS Developer ID / notarization。SHA-256 能校验文件完整性，但代码签名仍然是正式分发时需要补齐的一层。
 
@@ -164,7 +175,7 @@ wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user
 - `bin/<binaryName>.exe`：应用本体，也是自动更新使用的文件。
 - `bin/<binaryName>-amd64-installer.exe`：首次安装用的 NSIS 安装包。
 
-Actions 自动安装 NSIS，并把两个文件一起发布和计算校验和。后续原地更新无需重新运行安装包，要求安装目录对当前用户可写。自行改为机器级安装或选择受保护目录可能导致更新权限不足。原地更新不会重新执行安装脚本，也不会自动刷新 Windows 卸载列表的版本号。
+Actions 自动安装 NSIS，并把两个文件重命名为固定 Release 资产名后一起发布和计算校验和。后续原地更新无需重新运行安装包，要求安装目录对当前用户可写。自行改为机器级安装或选择受保护目录可能导致更新权限不足。原地更新不会重新执行安装脚本，也不会自动刷新 Windows 卸载列表的版本号。
 
 ## Ubuntu DEB 与 macOS PKG
 
