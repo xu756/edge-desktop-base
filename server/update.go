@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	desktopupdate "changeme/server/update"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
@@ -22,20 +23,24 @@ func (s *Server) updateInterval() time.Duration {
 	return time.Duration(cfg.UpdateIntervalHours) * time.Hour
 }
 
-func configuredCNBProvider() (*cnbUpdaterProvider, error) {
-	return newCNBUpdaterProvider(UpdateRepositoryURL, UpdateBranch, appConfig.BinaryName, nil)
-}
-
 func (s *Server) StartUpdateCfg() error {
-	provider, err := configuredCNBProvider()
+	manager, err := desktopupdate.NewManager(desktopupdate.Config{
+		RepositoryURL:  UpdateRepositoryURL,
+		Branch:         UpdateBranch,
+		AppName:        appConfig.BinaryName,
+		CurrentVersion: Version,
+	})
 	if err != nil {
 		return err
 	}
+	s.UpdateManager = manager
+
 	if err := s.App.Updater.Init(updater.Config{
 		CurrentVersion: Version,
-		Providers:      []updater.Provider{provider},
-		// The application owns the polling loop so Linux /usr/bin installs can
-		// use the same CNB runtime artifact with one privilege-escalated swap.
+		Providers:      []updater.Provider{manager.Provider()},
+		// The server owns the polling loop so update.Manager can handle the
+		// Linux /usr/bin privilege boundary while every other install uses the
+		// normal Wails updater flow.
 		CheckInterval: 0,
 		Window: &updater.BuiltinWindow{
 			HTML: strings.ReplaceAll(updaterWindowHTML, "{{APP_NAME}}", html.EscapeString(AppName)),
@@ -50,6 +55,7 @@ func (s *Server) StartUpdateCfg() error {
 	}); err != nil {
 		return err
 	}
+
 	if interval := s.updateInterval(); interval > 0 {
 		go s.automaticUpdateLoop(interval)
 	}
@@ -66,6 +72,7 @@ func (s *Server) automaticUpdateLoop(interval time.Duration) {
 		if !s.updating.CompareAndSwap(false, true) {
 			continue
 		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		err := s.performAutomaticUpdate(ctx)
 		cancel()
@@ -80,8 +87,11 @@ func (s *Server) automaticUpdateLoop(interval time.Duration) {
 }
 
 func (s *Server) performAutomaticUpdate(ctx context.Context) error {
-	if needsPrivilegedRuntimeUpdate() {
-		return s.performPrivilegedRuntimeUpdate(ctx)
+	if s.UpdateManager == nil {
+		return errors.New("update manager is not initialised")
+	}
+	if s.UpdateManager.NeedsPrivilegedRuntimeUpdate() {
+		return s.UpdateManager.PerformPrivilegedRuntimeUpdate(ctx, s.Quit)
 	}
 
 	release, err := s.App.Updater.Check(ctx)
@@ -101,15 +111,18 @@ func (s *Server) CheckForUpdates() error {
 	if s.App == nil {
 		return errors.New("application is not ready")
 	}
+	if s.UpdateManager == nil {
+		return errors.New("update manager is not initialised")
+	}
 	if !s.updating.CompareAndSwap(false, true) {
 		return errors.New("更新流程正在进行")
 	}
 
-	if needsPrivilegedRuntimeUpdate() {
+	if s.UpdateManager.NeedsPrivilegedRuntimeUpdate() {
 		defer s.updating.Store(false)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-		return s.performPrivilegedRuntimeUpdate(ctx)
+		return s.UpdateManager.PerformPrivilegedRuntimeUpdate(ctx, s.Quit)
 	}
 
 	go func() {
@@ -129,6 +142,9 @@ func (s *Server) CheckForUpdates() error {
 	return nil
 }
 
-func updateInstallHint() string {
-	return privilegedRuntimeUpdateHint()
+func (s *Server) updateInstallHint() string {
+	if s.UpdateManager == nil {
+		return ""
+	}
+	return s.UpdateManager.InstallHint()
 }
