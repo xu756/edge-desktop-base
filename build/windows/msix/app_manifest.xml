@@ -8,15 +8,15 @@
   IgnorableNamespaces="uap3">
   
   <Identity 
-    Name="com.example.edgeinfernodetest"
-    Publisher="CN=My Company"
+    Name="io.github.xu756.edge-desktop-base"
+    Publisher="CN=xu756"
     Version="0.1.0.0" 
     ProcessorArchitecture="x64" />
   
   <Properties>
-    <DisplayName>My Product</DisplayName>
-    <PublisherDisplayName>My Company</PublisherDisplayName>
-    <Description>A edgeinfer-node-test application</Description>
+    <DisplayName>edge-desktop-base</DisplayName>
+    <PublisherDisplayName>xu756</PublisherDisplayName>
+    <Description>Reusable Wails v3 desktop application foundation</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   
@@ -29,10 +29,10 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.example.edgeinfernodetest" Executable="edgeinfer-node-test" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="App" Executable="edge-desktop-base.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="My Product"
-        Description="A edgeinfer-node-test application"
+        DisplayName="edge-desktop-base"
+        Description="Reusable Wails v3 desktop application foundation"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -41,7 +41,7 @@
       </uap:VisualElements>
       
       <Extensions>
-        <desktop:Extension Category="windows.fullTrustProcess" Executable="edgeinfer-node-test" />
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="edge-desktop-base.exe" />
         
         
       </Extensions>

@@ -3,7 +3,7 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "edgeinfer-node-test"
+name: "edge-desktop-base"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
@@ -17,16 +17,16 @@ license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/edgeinfer-node-test"
-    dst: "/usr/bin/edgeinfer-node-test"
+  - src: "./bin/edge-desktop-base"
+    dst: "/usr/bin/edge-desktop-base"
     file_info:
       mode: 0755
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/edgeinfer-node-test.png"
+    dst: "/usr/share/icons/hicolor/128x128/apps/edge-desktop-base.png"
     file_info:
       mode: 0644
   - src: "./build/linux/desktop"
-    dst: "/usr/share/applications/edgeinfer-node-test.desktop"
+    dst: "/usr/share/applications/edge-desktop-base.desktop"
     file_info:
       mode: 0644
 

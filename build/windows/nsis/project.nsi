@@ -17,13 +17,7 @@ Unicode true
 ## For a installer with both architectures:
 ## > makensis -DARG_WAILS_AMD64_BINARY=..\..\bin\app-amd64.exe -DARG_WAILS_ARM64_BINARY=..\..\bin\app-arm64.exe
 ####
-## The following information is taken from the wails_tools.nsh file, but they can be overwritten here.
-####
-## !define INFO_PROJECTNAME    "my-project" # Default "edgeinfer-node-test"
-## !define INFO_COMPANYNAME    "My Company" # Default "My Company"
-## !define INFO_PRODUCTNAME    "My Product Name" # Default "My Product"
-## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.1.0"
-## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "© 2026, My Company"
+## Application metadata is generated from project/app.json into app_generated.nsh.
 ###
 ## !define PRODUCT_EXECUTABLE  "Application.exe"      # Default "${INFO_PROJECTNAME}.exe"
 ## !define UNINST_KEY_NAME     "UninstKeyInRegistry"  # Default "${INFO_COMPANYNAME}${INFO_PRODUCTNAME}"

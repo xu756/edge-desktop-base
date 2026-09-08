@@ -4,7 +4,7 @@ version: '3'
 
 info:
   companyName: "xu756"
-  productName: "edgeinfer-node-test"
+  productName: "edge-desktop-base"
   productIdentifier: "io.github.xu756.edge-desktop-base"
   description: "Reusable Wails v3 desktop application foundation"
   copyright: "(c) 2026, xu756"

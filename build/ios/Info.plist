@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>edgeinfer-node-test</string>
+    <string>edge-desktop-base</string>
     <key>CFBundleIdentifier</key>
-    <string>com.example.edgeinfernodetest</string>
+    <string>io.github.xu756.edge-desktop-base</string>
     <key>CFBundleName</key>
-    <string>My Product</string>
+    <string>edge-desktop-base</string>
     <key>CFBundleDisplayName</key>
-    <string>My Product</string>
+    <string>edge-desktop-base</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -49,11 +49,11 @@
     
     
     <key>NSHumanReadableCopyright</key>
-    <string>© 2026, My Company</string>
+    <string>(c) 2026, xu756</string>
     
     
     <key>CFBundleGetInfoString</key>
-    <string>This is a comment</string>
+    <string>Reusable Wails v3 desktop application foundation</string>
     
 </dict>
 </plist>

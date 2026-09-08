@@ -61,6 +61,133 @@ func xmlText(value string) string {
 	return b.String()
 }
 
+// xmlAttribute edits only the selected element, preserving namespaces and layout.
+func xmlAttribute(path, tag, key, value string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	re := regexp.MustCompile(`<` + regexp.QuoteMeta(tag) + `\b[^>]*>`)
+	attr := regexp.MustCompile(`\b` + regexp.QuoteMeta(key) + `="[^"]*"`)
+	found := false
+	data = re.ReplaceAllFunc(data, func(element []byte) []byte {
+		if !attr.Match(element) {
+			return element
+		}
+		found = true
+		return attr.ReplaceAllFunc(element, func([]byte) []byte { return []byte(key + `="` + xmlText(value) + `"`) })
+	})
+	if !found {
+		return fmt.Errorf("metadata attribute missing in %s: %s.%s", path, tag, key)
+	}
+	return writeChanged(path, data)
+}
+
+func platformMetadata(c project.Config, numeric string) error {
+	// Select the application's identity, never the Common Controls dependency.
+	if err := replace("build/windows/wails.exe.manifest", `(<assemblyIdentity type="win32" name=")[^"]*(" version=")[^"]*(" processorArchitecture="\*"/>)`,
+		`<assemblyIdentity type="win32" name="`+xmlText(c.Identifier)+`" version="`+numeric+`.0" processorArchitecture="*"/>`); err != nil {
+		return err
+	}
+	for key, value := range map[string]string{"INFO_PROJECTNAME": c.BinaryName, "INFO_COMPANYNAME": c.CompanyName, "INFO_PRODUCTNAME": c.Name, "INFO_PRODUCTVERSION": numeric, "INFO_COPYRIGHT": c.Copyright} {
+		if err := replace("build/windows/nsis/wails_tools.nsh", `(?m)!define `+key+` "[^"]*"`, fmt.Sprintf("!define %s %q", key, value)); err != nil {
+			return err
+		}
+	}
+	for _, path := range []string{"build/windows/msix/app_manifest.xml", "build/windows/msix/template.xml"} {
+		for key, value := range map[string]string{"DisplayName": c.Name, "PublisherDisplayName": c.CompanyName, "Description": c.Description} {
+			if err := replace(path, `<`+key+`>[^<]*</`+key+`>`, `<`+key+`>`+xmlText(value)+`</`+key+`>`); err != nil {
+				return err
+			}
+		}
+	}
+	for _, item := range []struct{ path, tag, key, value string }{
+		{"build/windows/msix/app_manifest.xml", "Identity", "Name", c.Identifier},
+		{"build/windows/msix/app_manifest.xml", "Identity", "Publisher", "CN=" + c.CompanyName},
+		{"build/windows/msix/app_manifest.xml", "Identity", "Version", numeric + ".0"},
+		{"build/windows/msix/app_manifest.xml", "Application", "Id", "App"},
+		{"build/windows/msix/app_manifest.xml", "Application", "Executable", c.BinaryName + ".exe"},
+		{"build/windows/msix/app_manifest.xml", "desktop:Extension", "Executable", c.BinaryName + ".exe"},
+		{"build/windows/msix/app_manifest.xml", "uap:VisualElements", "DisplayName", c.Name},
+		{"build/windows/msix/app_manifest.xml", "uap:VisualElements", "Description", c.Description},
+		{"build/windows/msix/template.xml", "Installer", "Path", c.BinaryName + "-amd64-installer.exe"},
+		{"build/windows/msix/template.xml", "Installer", "InstallLocation", `C:\Program Files\` + c.CompanyName + `\` + c.Name},
+		{"build/windows/msix/template.xml", "PackageInformation", "PackageName", c.Identifier},
+		{"build/windows/msix/template.xml", "PackageInformation", "PackageDisplayName", c.Name},
+		{"build/windows/msix/template.xml", "PackageInformation", "PublisherName", "CN=" + c.CompanyName},
+		{"build/windows/msix/template.xml", "PackageInformation", "PublisherDisplayName", c.CompanyName},
+		{"build/windows/msix/template.xml", "PackageInformation", "Version", numeric + ".0"},
+		{"build/windows/msix/template.xml", "PackageInformation", "PackageDescription", c.Description},
+		{"build/windows/msix/template.xml", "Application", "Id", "App"},
+		{"build/windows/msix/template.xml", "Application", "Description", c.Description},
+		{"build/windows/msix/template.xml", "Application", "DisplayName", c.Name},
+		{"build/windows/msix/template.xml", "Application", "ExecutableName", c.BinaryName + ".exe"},
+		{"build/windows/msix/template.xml", "SaveLocation", "PackagePath", c.BinaryName + ".msix"},
+	} {
+		if err := xmlAttribute(item.path, item.tag, item.key, item.value); err != nil {
+			return err
+		}
+	}
+	for _, path := range []string{"build/ios/Info.plist", "build/ios/Info.dev.plist"} {
+		name, identifier := c.Name, c.Identifier
+		if strings.Contains(path, ".dev.") {
+			name += " (Dev)"
+			identifier += ".dev"
+		}
+		for key, value := range map[string]string{"CFBundleName": name, "CFBundleDisplayName": name, "CFBundleExecutable": c.BinaryName, "CFBundleIdentifier": identifier, "CFBundleVersion": numeric, "CFBundleShortVersionString": numeric, "CFBundleGetInfoString": c.Description, "NSHumanReadableCopyright": c.Copyright} {
+			if err := replace(path, `<key>`+key+`</key>\s*<string>[^<]*</string>`, "<key>"+key+"</key>\n    <string>"+xmlText(value)+"</string>"); err != nil {
+				return err
+			}
+		}
+	}
+	path := "build/ios/project.pbxproj"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	match := regexp.MustCompile(`PRODUCT_NAME = "([^"]+)";`).FindSubmatch(data)
+	if match == nil {
+		return fmt.Errorf("PRODUCT_NAME missing in %s", path)
+	}
+	if err := replace(path, regexp.QuoteMeta(string(match[1])), c.BinaryName); err != nil {
+		return err
+	}
+	for key, value := range map[string]string{"PRODUCT_BUNDLE_IDENTIFIER": c.Identifier, "ORGANIZATIONNAME": c.CompanyName} {
+		if err := replace(path, key+` = "[^"]*";`, fmt.Sprintf("%s = %q;", key, value)); err != nil {
+			return err
+		}
+	}
+	for id, value := range map[string]string{"GJd-Yh-RWb": c.Name, "MN2-I3-ftu": c.Description} {
+		path := "build/ios/LaunchScreen.storyboard"
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		re := regexp.MustCompile(`<label\b[^>]*id="` + id + `"[^>]*>`)
+		element := re.Find(data)
+		if element == nil {
+			return fmt.Errorf("launch label missing: %s", id)
+		}
+		updated := regexp.MustCompile(`text="[^"]*"`).ReplaceAllString(string(element), "text=\""+xmlText(value)+"\"")
+		if err := replace(path, regexp.QuoteMeta(string(element)), updated); err != nil {
+			return err
+		}
+	}
+	// Java/JNI classes retain their framework namespace; only app identity changes.
+	androidID := strings.ReplaceAll(c.Identifier, "-", "_")
+	for _, item := range []struct{ path, pattern, value string }{
+		{"build/android/app/build.gradle", `applicationId "[^"]*"`, `applicationId "` + androidID + `"`},
+		{"build/android/app/build.gradle", `versionName "[^"]*"`, `versionName "` + numeric + `"`},
+		{"build/android/settings.gradle", `rootProject.name = "[^"]*"`, `rootProject.name = "` + c.BinaryName + `"`},
+		{"build/android/app/src/main/res/values/strings.xml", `<string name="app_name">[^<]*</string>`, `<string name="app_name">"` + xmlText(c.Name) + `"</string>`},
+	} {
+		if err := replace(item.path, item.pattern, item.value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func cleanupGeneratedDesktopFiles(current string) error {
 	paths, err := filepath.Glob("build/linux/*.desktop")
 	if err != nil {
@@ -138,6 +265,10 @@ func generate(c project.Config, release bool) error {
 				return err
 			}
 		}
+	}
+
+	if err := platformMetadata(c, numeric); err != nil {
+		return err
 	}
 
 	// Linux uses a binary-named desktop file for AppImage plus a stable source

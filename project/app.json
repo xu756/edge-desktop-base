@@ -1,9 +1,11 @@
 {
-  "name": "edgeinfer-node-test",
-  "binaryName": "edgeinfer-node-test",
+  "name": "edge-desktop-base",
+  "binaryName": "edge-desktop-base",
   "identifier": "io.github.xu756.edge-desktop-base",
-  "configDirName": "edgeinfer-node-test",
-  "legacyConfigDirNames": ["edge-desktop-base"],
+  "configDirName": "edge-desktop-base",
+  "legacyConfigDirNames": [
+    "edge-desktop-base"
+  ],
   "description": "Reusable Wails v3 desktop application foundation",
   "companyName": "xu756",
   "copyright": "(c) 2026, xu756",

@@ -23,7 +23,7 @@ func testGenerateRenamedProject(t *testing.T, newline string) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	for _, path := range []string{"build/config.yml", "build/windows/info.json", "build/darwin/Info.plist", "build/darwin/Info.dev.plist", "frontend/index.html", "build/linux/nfpm/nfpm.yaml"} {
+	for _, path := range []string{"build/windows/wails.exe.manifest", "build/windows/nsis/wails_tools.nsh", "build/windows/msix/app_manifest.xml", "build/windows/msix/template.xml", "build/ios/Info.plist", "build/ios/Info.dev.plist", "build/ios/project.pbxproj", "build/ios/LaunchScreen.storyboard", "build/android/app/build.gradle", "build/android/settings.gradle", "build/android/app/src/main/res/values/strings.xml", "build/config.yml", "build/windows/info.json", "build/darwin/Info.plist", "build/darwin/Info.dev.plist", "frontend/index.html", "build/linux/nfpm/nfpm.yaml"} {
 		data, err := os.ReadFile(filepath.Join(root, path))
 		if err != nil {
 			t.Fatal(err)
@@ -54,6 +54,11 @@ func testGenerateRenamedProject(t *testing.T, newline string) {
 		t.Fatal(err)
 	}
 	checks := map[string][]string{
+		"build/windows/wails.exe.manifest":     {`name="io.example.new-product" version="1.2.3.0"`, `name="Microsoft.Windows.Common-Controls" version="6.0.0.0"`},
+		"build/ios/Info.dev.plist":             {"io.example.new-product.dev", "New Product (Dev)"},
+		"build/ios/project.pbxproj":            {`PRODUCT_NAME = "new-product"`, `bin/new-product.a`},
+		"build/android/app/build.gradle":       {`applicationId "io.example.new_product"`, `namespace 'com.wails.app'`},
+		"build/windows/msix/app_manifest.xml":  {`Executable="new-product.exe"`, `Name="io.example.new-product"`},
 		"server/desktop/version_generated.go":  {`"1.2.3-beta.1"`},
 		"build/windows/nsis/app_generated.nsh": {`INFO_PRODUCTNAME "New Product"`, `INFO_PROJECTNAME "new-product"`, `INFO_PRODUCTVERSION "1.2.3"`, `APP_IDENTIFIER "io.example.new-product"`},
 		"build/darwin/Info.plist":              {"<string>new-product</string>", "<string>New Product</string>", "<string>io.example.new-product</string>"},
@@ -87,6 +92,20 @@ func testGenerateRenamedProject(t *testing.T, newline string) {
 		} else if strings.Contains(text, "\r") {
 			t.Errorf("%s: expected LF", path)
 		}
+	}
+	// A second rename must not rely on original scaffold strings.
+	c.Name = "Another Product"
+	c.BinaryName = "another-product"
+	c.Identifier = "io.example.another-product"
+	if err := generate(c, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat("build/linux/new-product.desktop"); !os.IsNotExist(err) {
+		t.Fatal("stale desktop file remains")
+	}
+	data, err := os.ReadFile("build/ios/project.pbxproj")
+	if err != nil || strings.Contains(string(data), "new-product") {
+		t.Fatal("Xcode rename left stale references", err)
 	}
 	t.Setenv("VERSION", "")
 	if err := generate(c, true); err == nil {

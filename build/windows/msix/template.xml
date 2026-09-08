@@ -8,27 +8,27 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="edgeinfer-node-test"
+        Path="edge-desktop-base-amd64-installer.exe"
         Arguments=""
-        InstallLocation="C:\Program Files\My Company\My Product">
+        InstallLocation="C:\Program Files\xu756\edge-desktop-base">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=My Company"
-        PublisherDisplayName="My Company"
+        PackageName="io.github.xu756.edge-desktop-base"
+        PackageDisplayName="edge-desktop-base"
+        PublisherName="CN=xu756"
+        PublisherDisplayName="xu756"
         Version="0.1.0.0"
-        PackageDescription="A edgeinfer-node-test application">
+        PackageDescription="Reusable Wails v3 desktop application foundation">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
         </Capabilities>
         <Applications>
             <Application
-                Id="com.example.edgeinfernodetest"
-                Description="A edgeinfer-node-test application"
-                DisplayName="My Product"
-                ExecutableName="edgeinfer-node-test"
+                Id="App"
+                Description="Reusable Wails v3 desktop application foundation"
+                DisplayName="edge-desktop-base"
+                ExecutableName="edge-desktop-base.exe"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
@@ -41,13 +41,13 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A edgeinfer-node-test application</Description>
+            <DisplayName>edge-desktop-base</DisplayName>
+            <PublisherDisplayName>xu756</PublisherDisplayName>
+            <Description>Reusable Wails v3 desktop application foundation</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="edgeinfer-node-test.msix" />
+    <SaveLocation PackagePath="edge-desktop-base.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>

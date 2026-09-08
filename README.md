@@ -1,4 +1,4 @@
-# edgeinfer-node-test
+# edge-desktop-base
 
 一个尽量小的 Wails v3 桌面应用底座。它不是管理后台，默认只提供后续业务应用普遍会复用的桌面能力。
 
@@ -75,10 +75,10 @@ go run ./cmd/buildmeta
 
 ```json
 {
-  "name": "edgeinfer-node-test",
-  "binaryName": "edgeinfer-node-test",
+  "name": "edge-desktop-base",
+  "binaryName": "edge-desktop-base",
   "identifier": "io.github.xu756.edge-desktop-base",
-  "configDirName": "edgeinfer-node-test",
+  "configDirName": "edge-desktop-base",
   "legacyConfigDirNames": ["edge-desktop-base"],
   "description": "Reusable Wails v3 desktop application foundation",
   "companyName": "xu756",
@@ -103,9 +103,12 @@ go run ./cmd/buildmeta
 | `defaultAPIAddress` | 本地 API 地址，只允许 loopback IP |
 | `devVersion` | 本地开发版本；正式 Release 版本来自 Git Tag |
 
-`buildmeta` 会同步 Wails 配置、Windows 版本资源、NSIS 元信息、macOS plist、Linux desktop/nfpm 元信息、网页标题等。根 `Taskfile.yml` 的 `APP_NAME` 直接读取 `project/app.json` 的 `binaryName`，不需要另外改名。
+`buildmeta` 会同步 Wails 配置、Windows 版本资源、NSIS 元信息、Windows manifest/MSIX 模板、macOS/iOS plist、iOS Xcode 项目及启动页、Android 应用名称/applicationId、Linux desktop/nfpm 元信息、网页标题等。根 `Taskfile.yml` 的 `APP_NAME` 直接读取 `project/app.json` 的 `binaryName`，不需要另外改名。
 
-需要换品牌图标时替换 `build/appicon.png`。
+需要换品牌图标时替换 `build/appicon.png`（程序托盘及桌面平台图标源），然后运行 `wails3 task common:generate:icons` 重新生成 Windows ICO / macOS ICNS。macOS 的 `build/appicon.icon` 是 Icon Composer 工程目录，里面的 `icon.json` 和 `Assets/` 也需要保持为同一品牌；macOS 构建可能使用它生成的资源。移动端图标需另外替换对应平台资源，buildmeta 不处理图片。
+
+Android applicationId 从 identifier 派生，将连字符转为下划线；`com.wails.app` Java/JNI namespace 保持不变。移动端的签名、Android versionCode 仍需按发布需求配置。MSIX 仅同步备用模板元信息，使用前需按实际打包环境调整 Installer 路径、InstallLocation 和签名证书；当前发布仍使用 NSIS。
+
 
 ## 发布架构
 
@@ -146,16 +149,16 @@ v0.2.0-beta.1
 发布到共享 CNB 分发仓库时自动加入 `binaryName` 命名空间：
 
 ```text
-edgeinfer-node-test-v0.0.1
-edgeinfer-node-test-v0.0.2
-edgeinfer-node-test-v0.1.0
-edgeinfer-node-test-v0.2.0-beta.1
+edge-desktop-base-v0.0.1
+edge-desktop-base-v0.0.2
+edge-desktop-base-v0.1.0
+edge-desktop-base-v0.2.0-beta.1
 ```
 
 因此同一个公开仓库可以同时分发多个程序：
 
 ```text
-edgeinfer-node-test-v0.0.2
+edge-desktop-base-v0.0.2
 another-desktop-app-v1.3.0
 camera-client-v2.1.4
 ```
@@ -169,7 +172,7 @@ CNB Git 仓库只保存很小的 JSON 更新元数据，不提交构建二进制
 稳定版本示例：
 
 ```text
-edgeinfer-node-test/
+edge-desktop-base/
 ├── latest.json
 ├── v0.0.1/
 │   └── manifest.json
@@ -182,7 +185,7 @@ edgeinfer-node-test/
 预发布版本还会维护：
 
 ```text
-edgeinfer-node-test/prerelease.json
+edge-desktop-base/prerelease.json
 ```
 
 正式客户端默认只读取 `latest.json`，不会因为发布 `v0.2.0-beta.1` 自动升级到预发布版本。
@@ -192,9 +195,9 @@ edgeinfer-node-test/prerelease.json
 ```json
 {
   "schemaVersion": 1,
-  "app": "edgeinfer-node-test",
+  "app": "edge-desktop-base",
   "version": "0.0.2",
-  "tag": "edgeinfer-node-test-v0.0.2",
+  "tag": "edge-desktop-base-v0.0.2",
   "channel": "stable",
   "publishedAt": "2026-09-08T12:00:00Z",
   "artifacts": [
@@ -202,7 +205,7 @@ edgeinfer-node-test/prerelease.json
       "kind": "runtime",
       "platform": "windows",
       "arch": "amd64",
-      "filename": "edgeinfer-node-test-windows-amd64.exe",
+      "filename": "edge-desktop-base-windows-amd64.exe",
       "sha256": "...",
       "size": 12345678
     },
@@ -210,7 +213,7 @@ edgeinfer-node-test/prerelease.json
       "kind": "installer",
       "platform": "windows",
       "arch": "amd64",
-      "filename": "edgeinfer-node-test-windows-amd64-installer.exe",
+      "filename": "edge-desktop-base-windows-amd64-installer.exe",
       "sha256": "...",
       "size": 12345678
     }
@@ -224,15 +227,15 @@ edgeinfer-node-test/prerelease.json
 
 大文件只作为对应 CNB Release 的附件，不提交到 Git 历史。
 
-以 `edgeinfer-node-test-v0.0.2` 为例：
+以 `edge-desktop-base-v0.0.2` 为例：
 
 ```text
-edgeinfer-node-test-windows-amd64.exe
-edgeinfer-node-test-windows-amd64-installer.exe
-edgeinfer-node-test-linux-amd64
-edgeinfer-node-test-linux-amd64.deb
-edgeinfer-node-test-darwin-arm64.zip
-edgeinfer-node-test-darwin-arm64.pkg
+edge-desktop-base-windows-amd64.exe
+edge-desktop-base-windows-amd64-installer.exe
+edge-desktop-base-linux-amd64
+edge-desktop-base-linux-amd64.deb
+edge-desktop-base-darwin-arm64.zip
+edge-desktop-base-darwin-arm64.pkg
 SHA256SUMS
 ```
 
@@ -241,8 +244,8 @@ SHA256SUMS
 如果以后恢复 macOS Intel 构建，还会增加：
 
 ```text
-edgeinfer-node-test-darwin-amd64.zip
-edgeinfer-node-test-darwin-amd64.pkg
+edge-desktop-base-darwin-amd64.zip
+edge-desktop-base-darwin-amd64.pkg
 ```
 
 ## 自动更新流程
@@ -262,13 +265,13 @@ github.com/wailsapp/wails/v3/pkg/updater/providers/github
        │
        ▼
 GET
-https://cnb.cool/xu756/public/-/git/raw/main/edgeinfer-node-test/latest.json
+https://cnb.cool/xu756/public/-/git/raw/main/edge-desktop-base/latest.json
        │
        ▼
 校验：
 - schemaVersion
-- app == edgeinfer-node-test
-- tag == edgeinfer-node-test-v<version>
+- app == edge-desktop-base
+- tag == edge-desktop-base-v<version>
 - semver 新于当前版本
 - platform / arch
 - runtime 精确文件名
@@ -277,7 +280,7 @@ https://cnb.cool/xu756/public/-/git/raw/main/edgeinfer-node-test/latest.json
        ▼
 下载
 https://cnb.cool/xu756/public/-/releases/download/
-edgeinfer-node-test-v0.0.2/edgeinfer-node-test-windows-amd64.exe
+edge-desktop-base-v0.0.2/edge-desktop-base-windows-amd64.exe
        │
        ▼
 Wails 校验 SHA-256
@@ -374,11 +377,11 @@ git push origin v0.2.0
 
 ```text
 Release Tag:
-edgeinfer-node-test-v0.2.0
+edge-desktop-base-v0.2.0
 
 Git metadata:
-edgeinfer-node-test/v0.2.0/manifest.json
-edgeinfer-node-test/latest.json
+edge-desktop-base/v0.2.0/manifest.json
+edge-desktop-base/latest.json
 ```
 
 如果发布：
@@ -392,11 +395,11 @@ git push origin v0.3.0-beta.1
 
 ```text
 Release Tag:
-edgeinfer-node-test-v0.3.0-beta.1
+edge-desktop-base-v0.3.0-beta.1
 
 Git metadata:
-edgeinfer-node-test/v0.3.0-beta.1/manifest.json
-edgeinfer-node-test/prerelease.json
+edge-desktop-base/v0.3.0-beta.1/manifest.json
+edge-desktop-base/prerelease.json
 ```
 
 不会覆盖稳定版 `latest.json`。
@@ -405,8 +408,8 @@ edgeinfer-node-test/prerelease.json
 
 首次运行会创建 `settings.json`，配置独立于程序安装位置，自更新不会替换它。所有桌面平台统一使用用户主目录下的 `.config`，目录名由项目配置中的 `configDirName` 决定：
 
-- Windows：`%USERPROFILE%\.config\edgeinfer-node-test\settings.json`
-- macOS / Linux：`~/.config/edgeinfer-node-test/settings.json`
+- Windows：`%USERPROFILE%\.config\edge-desktop-base\settings.json`
+- macOS / Linux：`~/.config/edge-desktop-base/settings.json`
 
 这里明确使用用户主目录，不跟随 `XDG_CONFIG_HOME`。新文件不存在时，会从平台原 `os.UserConfigDir()` 位置以及 `~/.config` 下的旧目录迁移；旧目录名来自 `legacyConfigDirNames`。迁移保留原文件、不覆盖已有的新文件。
 
@@ -452,7 +455,7 @@ Ubuntu 本地构建：
 
 ```bash
 wails3 task linux:create:deb ARCH=amd64
-sudo apt install ./bin/edgeinfer-node-test.deb
+sudo apt install ./bin/edge-desktop-base.deb
 ```
 
 DEB 面向 Ubuntu 24.04+，程序安装到 `/usr/bin/<binaryName>`，配置仍保存在用户目录。

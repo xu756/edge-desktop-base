@@ -4,9 +4,9 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>edgeinfer-node-test</string>
+            <string>edge-desktop-base</string>
         <key>CFBundleExecutable</key>
-            <string>edgeinfer-node-test</string>
+            <string>edge-desktop-base</string>
         <key>CFBundleIdentifier</key>
             <string>io.github.xu756.edge-desktop-base</string>
         <key>CFBundleVersion</key>
