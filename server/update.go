@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/updater"
-	githubupdater "github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 )
 
 //go:embed updater-window.html
@@ -26,12 +25,12 @@ func (s *Server) updateInterval() time.Duration {
 	return time.Duration(cfg.UpdateIntervalHours) * time.Hour
 }
 
+func configuredCNBProvider() (*cnbUpdaterProvider, error) {
+	return newCNBUpdaterProvider(UpdateRepositoryURL, UpdateBranch, appConfig.BinaryName, nil)
+}
+
 func (s *Server) StartUpdateCfg() error {
-	provider, err := githubupdater.New(githubupdater.Config{
-		Repository:    UpdateRepository,
-		ChecksumAsset: "SHA256SUMS",
-		AssetMatcher:  matchUpdateAsset,
-	})
+	provider, err := configuredCNBProvider()
 	if err != nil {
 		return err
 	}
@@ -57,7 +56,19 @@ func (s *Server) CheckForUpdates() error {
 		return errors.New("application is not ready")
 	}
 	if updateInstallHint() != "" {
-		return s.App.Browser.OpenURL("https://github.com/" + UpdateRepository + "/releases")
+		provider, err := configuredCNBProvider()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		manifest, err := provider.fetchLatestManifest(ctx)
+		if err == nil && manifest != nil && provider.validateManifest(manifest) == nil {
+			return s.App.Browser.OpenURL(provider.releasePageURL(manifest.Tag))
+		}
+		// The manifest may be temporarily unavailable while a release is being
+		// published. The public CNB releases page remains a safe fallback.
+		return s.App.Browser.OpenURL(provider.releasesPageURL())
 	}
 	if !s.updating.CompareAndSwap(false, true) {
 		return errors.New("更新流程正在进行，请查看更新窗口")
@@ -70,28 +81,6 @@ func (s *Server) CheckForUpdates() error {
 		}
 	}()
 	return nil
-}
-
-// Select only the stable runtime filename for the current platform and architecture.
-// The release tag carries the version; installers and sidecars must never replace the app binary.
-func matchUpdateAsset(req updater.CheckRequest, assets []githubupdater.ReleaseAsset) int {
-	expected := appConfig.BinaryName + "-" + req.Platform + "-" + req.Arch
-	switch req.Platform {
-	case "windows":
-		expected += ".exe"
-	case "darwin":
-		expected += ".zip"
-	case "linux":
-	default:
-		return -1
-	}
-
-	for i, asset := range assets {
-		if asset.Name == expected {
-			return i
-		}
-	}
-	return -1
 }
 
 func updateInstallHint() string {
