@@ -10,10 +10,11 @@ import (
 )
 
 type Settings struct {
-	AutoCheckUpdates    bool `json:"autoCheckUpdates"`
-	UpdateIntervalHours int  `json:"updateIntervalHours"`
-	CloseToTray         bool `json:"closeToTray"`
-	AutoStartShowWindow bool `json:"autoStartShowWindow"`
+	AutoCheckUpdates     bool `json:"autoCheckUpdates"`
+	AutoDownloadUpdates  bool `json:"autoDownloadUpdates"`
+	UpdateIntervalHours  int  `json:"updateIntervalHours"`
+	CloseToTray          bool `json:"closeToTray"`
+	AutoStartShowWindow  bool `json:"autoStartShowWindow"`
 }
 
 type SettingsStore struct {
@@ -42,7 +43,12 @@ func NewSettingsStore() *SettingsStore {
 }
 
 func defaultSettings() Settings {
-	return Settings{CloseToTray: true, AutoCheckUpdates: true, UpdateIntervalHours: 6}
+	return Settings{
+		CloseToTray:         true,
+		AutoCheckUpdates:    true,
+		AutoDownloadUpdates: false,
+		UpdateIntervalHours: 6,
+	}
 }
 
 // Copy only on first use of the new path; never remove or overwrite old settings.
@@ -125,6 +131,12 @@ func (s *SettingsStore) SetCloseToTray(enabled bool) error {
 }
 func (s *SettingsStore) SetAutoStartShowWindow(enabled bool) error {
 	return s.change(func(v *Settings) { v.AutoStartShowWindow = enabled })
+}
+func (s *SettingsStore) SetAutoCheckUpdates(enabled bool) error {
+	return s.change(func(v *Settings) { v.AutoCheckUpdates = enabled })
+}
+func (s *SettingsStore) SetAutoDownloadUpdates(enabled bool) error {
+	return s.change(func(v *Settings) { v.AutoDownloadUpdates = enabled })
 }
 func (s *SettingsStore) change(edit func(*Settings)) error {
 	s.mu.Lock()
