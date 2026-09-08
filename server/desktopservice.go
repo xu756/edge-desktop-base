@@ -24,6 +24,8 @@ type DesktopState struct {
 	AutoStartError           string            `json:"autoStartError,omitempty"`
 	CloseToTray              bool              `json:"closeToTray"`
 	TrayReady                bool              `json:"trayReady"`
+	AutoCheckUpdates         bool              `json:"autoCheckUpdates"`
+	AutoDownloadUpdates      bool              `json:"autoDownloadUpdates"`
 	UpdateRepositoryURL      string            `json:"updateRepositoryURL"`
 	UpdateInstallHint        string            `json:"updateInstallHint,omitempty"`
 	UpdateIntervalHours      int               `json:"updateIntervalHours"`
@@ -45,6 +47,7 @@ func (s *DesktopService) State() (DesktopState, error) {
 		return DesktopState{}, errors.New("desktop runtime is not ready")
 	}
 	autoStart, autoStartErr := s.server.App.Autostart.Status()
+	settings := s.server.Settings.Get()
 	state := DesktopState{
 		Name:                     AppName,
 		Version:                  Version,
@@ -53,15 +56,17 @@ func (s *DesktopService) State() (DesktopState, error) {
 		Platform:                 runtime.GOOS,
 		Architecture:             runtime.GOARCH,
 		AutoStart:                autoStart.Enabled,
-		AutoStartShowWindow:      s.server.Settings.Get().AutoStartShowWindow,
+		AutoStartShowWindow:      settings.AutoStartShowWindow,
 		AutoStartWindowSupported: autoStart.Strategy != application.AutostartStrategySMAppService,
 		ConfigPath:               s.server.Settings.Path(),
 		ConfigError:              s.server.Settings.Error(),
-		CloseToTray:              s.server.Settings.Get().CloseToTray,
+		CloseToTray:              settings.CloseToTray,
 		TrayReady:                s.server.Tray != nil,
+		AutoCheckUpdates:         settings.AutoCheckUpdates,
+		AutoDownloadUpdates:      settings.AutoDownloadUpdates,
 		UpdateRepositoryURL:      UpdateRepositoryURL,
 		UpdateInstallHint:        s.server.updateInstallHint(),
-		UpdateIntervalHours:      int(s.server.updateInterval().Hours()),
+		UpdateIntervalHours:      settings.UpdateIntervalHours,
 		LocalServer:              s.server.LocalServer.Status(),
 		WebSocketURL:             s.server.LocalServer.WebSocketURL(),
 	}
@@ -89,6 +94,14 @@ func (s *DesktopService) SetAutoStart(enabled bool) error {
 
 func (s *DesktopService) SetCloseToTray(enabled bool) error {
 	return s.server.Settings.SetCloseToTray(enabled)
+}
+
+func (s *DesktopService) SetAutoCheckUpdates(enabled bool) error {
+	return s.server.Settings.SetAutoCheckUpdates(enabled)
+}
+
+func (s *DesktopService) SetAutoDownloadUpdates(enabled bool) error {
+	return s.server.Settings.SetAutoDownloadUpdates(enabled)
 }
 
 func (s *DesktopService) CheckForUpdates() error {
