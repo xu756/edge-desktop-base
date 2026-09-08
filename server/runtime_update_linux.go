@@ -103,16 +103,16 @@ func (s *Server) performPrivilegedRuntimeUpdate(ctx context.Context) error {
 	// Write beside the target first, then atomically rename over the running
 	// executable. Linux keeps the old inode alive for the current process, so
 	// the next launch sees the new binary without risking a text-file-busy write.
-	script := `set -eu
-src="$1"
-dst="$2"
-install_tool="$3"
-mv_tool="$4"
-tmp="${dst}.update.$$"
-trap 'rm -f "$tmp"' EXIT
-"$install_tool" -m 0755 "$src" "$tmp"
-"$mv_tool" -f "$tmp" "$dst"
-trap - EXIT`
+	script := "set -eu\n" +
+		"src=\"$1\"\n" +
+		"dst=\"$2\"\n" +
+		"install_tool=\"$3\"\n" +
+		"mv_tool=\"$4\"\n" +
+		"tmp=\"${dst}.update.$$\"\n" +
+		"trap 'rm -f \"$tmp\"' EXIT\n" +
+		"\"$install_tool\" -m 0755 \"$src\" \"$tmp\"\n" +
+		"\"$mv_tool\" -f \"$tmp\" \"$dst\"\n" +
+		"trap - EXIT"
 
 	args := []string{"/bin/sh", "-c", script, "update-runtime", staged, target, installTool, mvTool}
 	var cmd *exec.Cmd
