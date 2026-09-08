@@ -3,10 +3,12 @@ package server
 import (
 	"embed"
 	"errors"
+	"sync"
 	"sync/atomic"
 
 	desktopupdate "changeme/server/update"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
 type Server struct {
@@ -18,6 +20,9 @@ type Server struct {
 	DesktopService *DesktopService
 
 	updateManager *desktopupdate.Manager
+	updateWindow  *application.WebviewWindow
+	updateRelease *updater.Release
+	updateMu      sync.Mutex
 	quitting      atomic.Bool
 	updating      atomic.Bool
 }
