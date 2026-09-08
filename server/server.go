@@ -17,6 +17,7 @@ type Server struct {
 	DesktopService *DesktopService
 
 	quitting atomic.Bool
+	updating atomic.Bool
 }
 
 func New() *Server {

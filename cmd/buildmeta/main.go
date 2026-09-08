@@ -8,23 +8,31 @@ import (
 	"time"
 )
 
-var infoVersionPattern = regexp.MustCompile(`(?m)^  version: "[^"]+"`)
+var (
+	infoVersionPattern     = regexp.MustCompile(`(?m)^  version: "[^"]+"`)
+	semanticVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
+)
 
 func main() {
-	version := strings.TrimSpace(os.Getenv("VERSION"))
-	if version == "" {
-		version = "0.1.0"
-	}
-	version = strings.TrimPrefix(version, "v")
-	commit := strings.TrimSpace(os.Getenv("COMMIT"))
-	if commit == "" {
-		commit = "dev"
-	}
-	buildTime := time.Now().UTC().Format(time.RFC3339)
-	if strings.ContainsAny(version+commit, "\"\r\n") {
-		panic("invalid build metadata")
+	rawVersion := strings.TrimSpace(os.Getenv("VERSION"))
+	if rawVersion == "" {
+		panic("VERSION is required; release builds must be triggered by a v* git tag")
 	}
 
+	version := strings.TrimPrefix(rawVersion, "v")
+	if !semanticVersionPattern.MatchString(version) {
+		panic(fmt.Sprintf("invalid semantic version: %s", rawVersion))
+	}
+
+	commit := strings.TrimSpace(os.Getenv("COMMIT"))
+	if commit == "" {
+		commit = "unknown"
+	}
+	if strings.ContainsAny(commit, "\"\r\n") {
+		panic("invalid commit metadata")
+	}
+
+	buildTime := time.Now().UTC().Format(time.RFC3339)
 	content := fmt.Sprintf(`package server
 
 const (
@@ -41,6 +49,7 @@ var (
 	BuildTime = %q
 )
 `, version, commit, buildTime)
+
 	if err := os.WriteFile("server/buildinfo.go", []byte(content), 0o644); err != nil {
 		panic(err)
 	}
@@ -50,6 +59,7 @@ var (
 	if err != nil {
 		panic(err)
 	}
+
 	updated := infoVersionPattern.ReplaceAllString(string(config), `  version: "`+version+`"`)
 	if err := os.WriteFile(configPath, []byte(updated), 0o644); err != nil {
 		panic(err)

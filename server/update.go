@@ -30,7 +30,12 @@ func (s *Server) CheckForUpdates() error {
 	if s.App == nil {
 		return errors.New("application is not ready")
 	}
+	if !s.updating.CompareAndSwap(false, true) {
+		return nil
+	}
+
 	go func() {
+		defer s.updating.Store(false)
 		if err := s.App.Updater.CheckAndInstall(context.Background()); err != nil {
 			s.App.Logger.Error("update", "error", err)
 		}

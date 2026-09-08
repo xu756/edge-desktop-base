@@ -16,6 +16,8 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
+const maxWebSocketMessageSize = 1 << 20
+
 type LocalServerStatus struct {
 	Address string `json:"address"`
 	Running bool   `json:"running"`
@@ -92,11 +94,21 @@ func (s *LocalServer) WebSocketURL() string {
 }
 
 func (s *LocalServer) handleWebSocket(c *gin.Context) {
-	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
+		OriginPatterns: []string{
+			"wails.localhost",
+			"wails.localhost:*",
+			"localhost",
+			"localhost:*",
+			"127.0.0.1",
+			"127.0.0.1:*",
+		},
+	})
 	if err != nil {
 		return
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "closed")
+	conn.SetReadLimit(maxWebSocketMessageSize)
 
 	ctx := c.Request.Context()
 	if err := wsjson.Write(ctx, conn, map[string]any{

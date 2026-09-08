@@ -1,5 +1,4 @@
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { WML } from '@wailsio/runtime'
 import ReactDOM from 'react-dom/client'
 import { routeTree } from './routeTree.gen'
 
@@ -14,8 +13,11 @@ declare module '@tanstack/react-router' {
     router: typeof router
   }
 }
-// Wire up data-wml-openURL links (logos + footer "Docs" link) once the DOM is ready.
-WML.Enable()
+
+// The base template deliberately disables HTML drag/drop inside the WebView.
+window.addEventListener('dragstart', (event) => event.preventDefault())
+window.addEventListener('dragover', (event) => event.preventDefault())
+window.addEventListener('drop', (event) => event.preventDefault())
 
 const rootElement = document.getElementById('app')!
 
