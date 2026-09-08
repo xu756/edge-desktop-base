@@ -113,6 +113,11 @@ trap 'rm -f "$tmp"' EXIT
 "$install_tool" -m 0755 "$src" "$tmp"
 "$mv_tool" -f "$tmp" "$dst"
 trap - EXIT`
+	// The raw string above is normalised below so the shell receives quotes,
+	// not backslash-escaped quote characters.
+	script = bytes.NewBufferString(script).String()
+	script = string(bytes.ReplaceAll([]byte(script), []byte(`\"`), []byte(`"`)))
+
 	args := []string{"/bin/sh", "-c", script, "update-runtime", staged, target, installTool, mvTool}
 	var cmd *exec.Cmd
 	if os.Geteuid() == 0 {
