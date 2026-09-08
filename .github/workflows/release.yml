@@ -189,8 +189,5 @@ jobs:
 
       - name: Publish CNB distribution
         env:
-          CNB_REPO_URL: ${{ vars.CNB_REPO_URL }}
-          CNB_TARGET_BRANCH: ${{ vars.CNB_TARGET_BRANCH }}
-          CNB_USERNAME: ${{ vars.CNB_USERNAME }}
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
         run: python3 ./scripts/publish-cnb-release.py
