@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 
+	desktopupdate "changeme/server/update"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -15,6 +16,7 @@ type Server struct {
 	Settings       *SettingsStore
 	LocalServer    *LocalServer
 	DesktopService *DesktopService
+	UpdateManager  *desktopupdate.Manager
 
 	quitting atomic.Bool
 	updating atomic.Bool
