@@ -145,7 +145,13 @@ func (s *Server) CheckForUpdates() error {
 	}
 
 	state := s.App.Updater.State()
-	if state == updater.StateAvailable || state == updater.StateDownloading || state == updater.StateVerifying || state == updater.StateInstalling || state == updater.StateReady {
+	reuseState := state == updater.StateAvailable || state == updater.StateDownloading || state == updater.StateVerifying || state == updater.StateInstalling || state == updater.StateReady
+	if state == updater.StateAvailable && !s.hasUpdateRelease() {
+		// SkipVersion leaves Wails in Available until the next Check. With no
+		// retained release there is nothing meaningful to replay, so check again.
+		reuseState = false
+	}
+	if reuseState {
 		s.openUpdateWindow(false)
 		s.replayUpdateWindowState()
 		return nil
@@ -250,6 +256,12 @@ func (s *Server) setUpdateRelease(release *updater.Release) {
 	s.updateMu.Unlock()
 }
 
+func (s *Server) hasUpdateRelease() bool {
+	s.updateMu.Lock()
+	defer s.updateMu.Unlock()
+	return s.updateRelease != nil
+}
+
 func (s *Server) openUpdateWindow(reset bool) {
 	if s.App == nil {
 		return
@@ -338,6 +350,8 @@ func (s *Server) replayUpdateWindowState() {
 		window.EmitEvent(updater.EventUpdateReady, release)
 	case updater.StateUpToDate:
 		window.EmitEvent(updater.EventNoUpdate)
+	case updater.StateError:
+		window.EmitEvent(updater.EventError, updater.ErrorInfo{Stage: updater.StageCheck, Message: "更新失败，请重试"})
 	}
 }
 
