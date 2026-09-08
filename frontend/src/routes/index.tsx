@@ -53,8 +53,8 @@ function Home() {
     const subscriptions = [
       Events.On('wails:updater:check-started', () => setNotice('正在检查更新…')),
       Events.On('wails:updater:no-update', () => setNotice('当前已是最新版本')),
-      Events.On('wails:updater:update-available', () => setNotice('发现新版本，请在更新窗口中查看详情')),
-      Events.On('wails:updater:update-ready', () => setNotice('更新已准备好，请在更新窗口中确认重启')),
+      Events.On('wails:updater:update-available', () => setNotice('发现新版本，正在下载并安装…')),
+      Events.On('wails:updater:update-ready', () => setNotice('更新已安装，正在重启应用…')),
       Events.On('wails:updater:error', (event) => {
         const data = event.data as { message?: string } | undefined
         setNotice(`更新失败：${data?.message ?? '请查看更新窗口'}`)
@@ -109,8 +109,13 @@ function Home() {
   const checkUpdate = async () => {
     setSaving('update')
     try {
-      setNotice(state?.updateInstallHint ? '正在打开 CNB 版本下载页面，请选择对应系统和架构的安装包' : '正在打开更新窗口…')
+      setNotice(state?.updateInstallHint
+        ? '正在检查更新；发现新版本后会自动下载，请按系统提示授权安装…'
+        : '正在检查并自动更新…')
       await DesktopService.CheckForUpdates()
+      if (state?.updateInstallHint) {
+        setNotice('检查完成；如有新版本，安装完成后应用会自动重启。')
+      }
     } catch (error) {
       setNotice(errorMessage(error))
     } finally {
@@ -213,7 +218,7 @@ function Home() {
               <Download className='size-4' />
               自动更新
             </CardTitle>
-            <CardDescription>{state?.updateInstallHint || 'CNB 公共分发仓库 + SHA-256 校验。'}</CardDescription>
+            <CardDescription>{state?.updateInstallHint || 'CNB 公共分发仓库 + SHA-256 校验；更新完成后自动重启。'}</CardDescription>
           </CardHeader>
           <CardContent>
             <InfoRow label='当前版本' value={state ? `v${state.version}` : '-'} />
@@ -225,7 +230,7 @@ function Home() {
               ) : (
                 <RefreshCw data-icon='inline-start' />
               )}
-              {state?.updateInstallHint ? '下载新版安装包' : '检查更新'}
+              检查并自动更新
             </Button>
           </CardContent>
         </Card>
