@@ -156,6 +156,7 @@ func (s *Server) CheckForUpdates() error {
 		}
 		s.setUpdateRelease(release)
 		s.resizeUpdateWindow(s.App.Updater.State())
+		s.replayUpdateWindowState()
 	}()
 	return nil
 }
@@ -185,6 +186,7 @@ func (s *Server) handleUpdateDownload() {
 		return
 	}
 	s.resizeUpdateWindow(s.App.Updater.State())
+	s.replayUpdateWindowState()
 }
 
 func (s *Server) handleUpdateRestart() {
@@ -236,6 +238,7 @@ func (s *Server) openUpdateWindow(reset bool) {
 
 	s.updateMu.Lock()
 	window := s.updateWindow
+	created := false
 	if window == nil {
 		window = s.App.Window.NewWithOptions(application.WebviewWindowOptions{
 			Title:                "软件更新",
@@ -248,16 +251,19 @@ func (s *Server) openUpdateWindow(reset bool) {
 			AllowSimpleEventEmit: true,
 		})
 		s.updateWindow = window
+		created = true
 	}
 	s.updateMu.Unlock()
 
-	window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
-		s.updateMu.Lock()
-		if s.updateWindow == window {
-			s.updateWindow = nil
-		}
-		s.updateMu.Unlock()
-	})
+	if created {
+		window.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+			s.updateMu.Lock()
+			if s.updateWindow == window {
+				s.updateWindow = nil
+			}
+			s.updateMu.Unlock()
+		})
+	}
 	window.Center()
 	window.Show()
 	window.Focus()
