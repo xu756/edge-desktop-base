@@ -44,9 +44,11 @@ GET http://127.0.0.1:19876/health
 
 ## 发布与自动更新
 
-Actions 不响应 `main`/功能分支 push，也不提供手动构建入口。只有推送符合语义化版本格式的 `v*` tag 才会执行发布构建：
+Actions 不响应 `main`/功能分支 push，也不提供手动构建入口。只有推送符合语义化版本格式的 `v*` tag 才会执行发布构建。建议始终在最新 `main` 提交上创建发布 tag：
 
 ```bash
+git checkout main
+git pull --ff-only origin main
 git tag v0.2.0
 git push origin v0.2.0
 ```
@@ -58,9 +60,16 @@ git tag v0.3.0-beta.1
 git push origin v0.3.0-beta.1
 ```
 
-构建时会直接读取 tag：`v0.2.0` 会注入为应用版本 `0.2.0`，同时同步到 Wails `build/config.yml`。运行时版本不带前导 `v`，与 Wails GitHub updater 的版本规则一致。
+构建时会直接读取 tag：`v0.2.0` 会注入为应用版本 `0.2.0`，同时同步到 Wails `build/config.yml`、Windows 版本资源、NSIS 元信息、macOS plist 和 Linux nfpm 元信息。运行时版本不带前导 `v`，与 Wails GitHub updater 的版本规则一致。
 
-Release 资产包含 tag、OS 和 Arch，例如：
+当前 Actions 自动发布目标：
+
+- Windows amd64：应用更新 EXE + 用户级 NSIS installer
+- Linux amd64：应用更新二进制 + DEB installer
+- macOS arm64：应用更新 ZIP + PKG installer
+- macOS amd64：Task 已支持，但 Actions matrix 当前暂时注释，不自动发布
+
+以 `v0.2.0` 为例，当前自动发布的 Release 资产为：
 
 ```text
 edgeinfer-node-test-v0.2.0-windows-amd64.exe
@@ -69,14 +78,17 @@ edgeinfer-node-test-v0.2.0-linux-amd64
 edgeinfer-node-test-v0.2.0-linux-amd64.deb
 edgeinfer-node-test-v0.2.0-darwin-arm64.zip
 edgeinfer-node-test-v0.2.0-darwin-arm64.pkg
-edgeinfer-node-test-v0.2.0-darwin-amd64.zip
-edgeinfer-node-test-v0.2.0-darwin-amd64.pkg
 SHA256SUMS
 ```
 
-更新器严格匹配 `<binaryName>-v<版本>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名），排除安装包、签名等附件，并使用同一 Release 中的 `SHA256SUMS` 校验下载内容。
+如果以后重新启用 macOS Intel matrix，还会额外发布：
 
-当前发布目标：Windows amd64（安装包和更新 EXE）、Linux amd64（DEB 和更新二进制）、macOS arm64 / amd64（PKG 和更新 ZIP）。
+```text
+edgeinfer-node-test-v0.2.0-darwin-amd64.zip
+edgeinfer-node-test-v0.2.0-darwin-amd64.pkg
+```
+
+更新器严格匹配 `<binaryName>-v<版本>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名），排除安装包、签名等附件，并使用同一 Release 中的 `SHA256SUMS` 校验下载内容。
 
 生产发布前建议补 Windows Authenticode 与 macOS Developer ID / notarization。SHA-256 能校验文件完整性，但代码签名仍然是正式分发时需要补齐的一层。
 
@@ -109,7 +121,6 @@ SHA256SUMS
 **macOS 限制：** 当前 Wails beta.17 在 macOS 13+ 的打包 `.app` 中使用 SMAppService，忽略自定义参数；该模式下窗口开关会禁用并提示，由系统决定启动窗口行为。
 
 更新窗口模板位于 `server/updater-window.html`，基于 Wails beta.17 的 MIT 模板做中文化和样式定制。修改品牌、颜色或文案可直接编辑该文件；升级 Wails 时需核对事件协议和 runtime-ready 握手。Actions 仍仅由版本 tag 触发，Windows 构建额外生成用户级 NSIS 安装包。
-
 
 ## 项目级配置（开发者修改）
 
@@ -155,10 +166,9 @@ wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user
 
 Actions 自动安装 NSIS，并把两个文件一起发布和计算校验和。后续原地更新无需重新运行安装包，要求安装目录对当前用户可写。自行改为机器级安装或选择受保护目录可能导致更新权限不足。原地更新不会重新执行安装脚本，也不会自动刷新 Windows 卸载列表的版本号。
 
-
 ## Ubuntu DEB 与 macOS PKG
 
-Actions 为 Ubuntu amd64 额外发布 `.deb`，为 macOS amd64/arm64 分别发布 `.pkg`，并保留现有免安装更新产物。所有安装包都包含在 `SHA256SUMS` 中。
+Actions 为 Ubuntu amd64 发布 `.deb`，为 macOS arm64 发布 `.pkg`，并保留对应免安装更新产物。macOS amd64 的 PKG/ZIP Task 仍可本地构建，但当前 Actions matrix 暂停自动发布。所有实际发布的安装包都包含在 `SHA256SUMS` 中。
 
 Ubuntu 本地构建（默认 amd64，可传入实际目标架构）：
 
@@ -173,7 +183,7 @@ macOS 本地构建（必须在 macOS 上安装 Xcode Command Line Tools）：
 
 ```bash
 wails3 task darwin:package:pkg ARCH=arm64
-# Intel Mac 使用 ARCH=amd64
+# Intel Mac 如需本地构建可使用 ARCH=amd64
 ```
 
 生成 `bin/<binaryName>-<arch>.pkg`，双击安装到 `/Applications/<binaryName>.app`。构建使用 `pkgbuild`，禁用 bundle relocation，避免安装器误将 Downloads 下的旧副本作为目标。PKG 本身尚未使用 Developer ID Installer 证书签名或公证，内部 `.app` 沿用现有 ad-hoc 签名；正式公开分发需配置相应签名与公证，否则可能被 Gatekeeper 阻止。
