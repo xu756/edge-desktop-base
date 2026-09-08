@@ -66,14 +66,17 @@ Release 资产包含 tag、OS 和 Arch，例如：
 edgeinfer-node-test-v0.2.0-windows-amd64.exe
 edgeinfer-node-test-v0.2.0-windows-amd64-installer.exe
 edgeinfer-node-test-v0.2.0-linux-amd64
+edgeinfer-node-test-v0.2.0-linux-amd64.deb
 edgeinfer-node-test-v0.2.0-darwin-arm64.zip
+edgeinfer-node-test-v0.2.0-darwin-arm64.pkg
 edgeinfer-node-test-v0.2.0-darwin-amd64.zip
+edgeinfer-node-test-v0.2.0-darwin-amd64.pkg
 SHA256SUMS
 ```
 
 更新器严格匹配 `<binaryName>-v<版本>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名），排除安装包、签名等附件，并使用同一 Release 中的 `SHA256SUMS` 校验下载内容。
 
-当前发布目标：Windows amd64（安装包和更新 EXE）、Linux amd64、macOS arm64、macOS amd64。
+当前发布目标：Windows amd64（安装包和更新 EXE）、Linux amd64（DEB 和更新二进制）、macOS arm64 / amd64（PKG 和更新 ZIP）。
 
 生产发布前建议补 Windows Authenticode 与 macOS Developer ID / notarization。SHA-256 能校验文件完整性，但代码签名仍然是正式分发时需要补齐的一层。
 
@@ -151,3 +154,28 @@ wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user
 - `bin/<binaryName>-amd64-installer.exe`：首次安装用的 NSIS 安装包。
 
 Actions 自动安装 NSIS，并把两个文件一起发布和计算校验和。后续原地更新无需重新运行安装包，要求安装目录对当前用户可写。自行改为机器级安装或选择受保护目录可能导致更新权限不足。原地更新不会重新执行安装脚本，也不会自动刷新 Windows 卸载列表的版本号。
+
+
+## Ubuntu DEB 与 macOS PKG
+
+Actions 为 Ubuntu amd64 额外发布 `.deb`，为 macOS amd64/arm64 分别发布 `.pkg`，并保留现有免安装更新产物。所有安装包都包含在 `SHA256SUMS` 中。
+
+Ubuntu 本地构建（默认 amd64，可传入实际目标架构）：
+
+```bash
+wails3 task linux:create:deb ARCH=amd64
+sudo apt install ./bin/edgeinfer-node-test.deb
+```
+
+DEB 面向 Ubuntu 24.04+，依赖 `libgtk-4-1` 和 `libwebkitgtk-6.0-4`。程序安装到 `/usr/bin/<binaryName>`，应用菜单与图标安装到 `/usr/share`；卸载不删除用户目录中的配置。新版本通过再次安装新版 DEB 升级；仅下载 GitHub DEB 并不会自动配置 APT 软件源。
+
+macOS 本地构建（必须在 macOS 上安装 Xcode Command Line Tools）：
+
+```bash
+wails3 task darwin:package:pkg ARCH=arm64
+# Intel Mac 使用 ARCH=amd64
+```
+
+生成 `bin/<binaryName>-<arch>.pkg`，双击安装到 `/Applications/<binaryName>.app`。构建使用 `pkgbuild`，禁用 bundle relocation，避免安装器误将 Downloads 下的旧副本作为目标。PKG 本身尚未使用 Developer ID Installer 证书签名或公证，内部 `.app` 沿用现有 ad-hoc 签名；正式公开分发需配置相应签名与公证，否则可能被 Gatekeeper 阻止。
+
+**更新行为：** `/usr/bin` 下的本应用和 `/Applications` 下的应用禁用自动原地替换；界面显示“下载新版安装包”，点击主界面或托盘的更新入口会打开 Releases 下载页面。使用新版 DEB/PKG 升级，保持权限和系统安装记录一致。用户目录中的免安装二进制 / `.app` 仍使用原来的应用内更新。用户配置路径仍为 `~/.config/<configDirName>/settings.json`。

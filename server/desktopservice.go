@@ -24,6 +24,7 @@ type DesktopState struct {
 	CloseToTray              bool              `json:"closeToTray"`
 	TrayReady                bool              `json:"trayReady"`
 	UpdateRepository         string            `json:"updateRepository"`
+	UpdateInstallHint        string            `json:"updateInstallHint,omitempty"`
 	UpdateIntervalHours      int               `json:"updateIntervalHours"`
 	LocalServer              LocalServerStatus `json:"localServer"`
 	WebSocketURL             string            `json:"websocketURL"`
@@ -58,6 +59,7 @@ func (s *DesktopService) State() (DesktopState, error) {
 		CloseToTray:              s.server.Settings.Get().CloseToTray,
 		TrayReady:                s.server.Tray != nil,
 		UpdateRepository:         UpdateRepository,
+		UpdateInstallHint:        updateInstallHint(),
 		UpdateIntervalHours:      int(s.server.updateInterval().Hours()),
 		LocalServer:              s.server.LocalServer.Status(),
 		WebSocketURL:             s.server.LocalServer.WebSocketURL(),

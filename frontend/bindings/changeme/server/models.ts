@@ -17,6 +17,7 @@ export interface DesktopState {
     "closeToTray": boolean;
     "trayReady": boolean;
     "updateRepository": string;
+    "updateInstallHint"?: string;
     "updateIntervalHours": number;
     "localServer": LocalServerStatus;
     "websocketURL": string;

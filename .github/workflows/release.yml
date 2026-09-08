@@ -48,15 +48,15 @@ jobs:
           - runner: ubuntu-24.04
             platform: linux
             arch: amd64
-            task: linux:build
+            task: linux:create:deb
           - runner: macos-15
             platform: darwin
             arch: arm64
-            task: darwin:package
+            task: darwin:package:pkg
           - runner: macos-15-intel
             platform: darwin
             arch: amd64
-            task: darwin:package
+            task: darwin:package:pkg
 
     runs-on: ${{ matrix.runner }}
     env:
@@ -124,6 +124,14 @@ jobs:
           cp "bin/${APP_NAME}" "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
           chmod +x "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
 
+      - name: Prepare Ubuntu installer
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          packages=(bin/*.deb)
+          test "${#packages[@]}" -eq 1
+          cp "${packages[0]}" "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}.deb"
+
       - name: Prepare macOS updater asset
         if: runner.os == 'macOS'
         shell: bash
@@ -132,6 +140,12 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent \
             "bin/${APP_NAME}.app" \
             "release/${ASSET_PREFIX}-darwin-${{ matrix.arch }}.zip"
+
+      - name: Prepare macOS installer
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cp "bin/${APP_NAME}-${{ matrix.arch }}.pkg" "release/${ASSET_PREFIX}-darwin-${{ matrix.arch }}.pkg"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

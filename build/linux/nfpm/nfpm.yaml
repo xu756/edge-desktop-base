@@ -7,22 +7,28 @@ name: "edgeinfer-node-test"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
-section: "default"
-priority: "extra"
-maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
+section: "utils"
+priority: "optional"
+maintainer: "xu756"
 description: "Reusable Wails v3 desktop application foundation"
 vendor: "xu756"
-homepage: "https://wails.io"
+homepage: "https://github.com/xu756/edgeinfer-node-test"
 license: "MIT"
 release: "1"
 
 contents:
   - src: "./bin/edgeinfer-node-test"
-    dst: "/usr/local/bin/edgeinfer-node-test"
+    dst: "/usr/bin/edgeinfer-node-test"
+    file_info:
+      mode: 0755
   - src: "./build/appicon.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/edgeinfer-node-test.png"
+    file_info:
+      mode: 0644
   - src: "./build/linux/edgeinfer-node-test.desktop"
     dst: "/usr/share/applications/edgeinfer-node-test.desktop"
+    file_info:
+      mode: 0644
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:
@@ -46,6 +52,7 @@ overrides:
 # scripts section to ensure desktop database is updated after install
 scripts:
   postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
+  postremove: "./build/linux/nfpm/scripts/postinstall.sh"
   # You can also add preremove, postremove if needed
   # preremove: "./build/linux/nfpm/scripts/preremove.sh"
   # postremove: "./build/linux/nfpm/scripts/postremove.sh"

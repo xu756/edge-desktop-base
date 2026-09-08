@@ -120,6 +120,14 @@ tasks:
     cmds:
       - task: create:app:bundle
 
+  package:pkg:
+    summary: Build a system installer for /Applications
+    platforms: [darwin]
+    deps:
+      - task: package
+    cmds:
+      - bash build/darwin/package-pkg.sh "{{.BIN_DIR}}/{{.APP_NAME}}.app" "{{.BIN_DIR}}/{{.APP_NAME}}-{{.ARCH | default ARCH}}.pkg"
+
   package:universal:
     summary: Packages darwin universal binary (arm64 + amd64)
     deps:

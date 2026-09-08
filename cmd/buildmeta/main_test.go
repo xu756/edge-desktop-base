@@ -58,7 +58,7 @@ func testGenerateRenamedProject(t *testing.T, newline string) {
 		"build/windows/nsis/app_generated.nsh": {`INFO_PRODUCTNAME "New Product"`, `INFO_PROJECTNAME "new-product"`, `INFO_PRODUCTVERSION "1.2.3"`, `APP_IDENTIFIER "io.example.new-product"`},
 		"build/darwin/Info.plist":              {"<string>new-product</string>", "<string>New Product</string>", "<string>io.example.new-product</string>"},
 		"build/linux/new-product.desktop":      {"Name=New Product", "Exec=new-product"},
-		"build/linux/nfpm/nfpm.yaml":           {"./bin/new-product", "/usr/share/applications/new-product.desktop"},
+		"build/linux/nfpm/nfpm.yaml":           {"./bin/new-product", "/usr/bin/new-product", "/usr/share/applications/new-product.desktop", `version: "1.2.3-beta.1"`, "mode: 0755", "mode: 0644"},
 		"frontend/index.html":                  {"<title>New Product</title>"},
 	}
 	for path, needles := range checks {

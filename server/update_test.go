@@ -16,6 +16,8 @@ func TestUpdateAssetSelection(t *testing.T) {
 		{Name: prefix + "-windows-amd64.exe"},
 		{Name: prefix + "-darwin-arm64.zip"},
 		{Name: prefix + "-linux-amd64"},
+		{Name: prefix + "-linux-amd64.deb"},
+		{Name: prefix + "-darwin-arm64.pkg"},
 	}
 	for _, tc := range []struct {
 		platform, arch string
@@ -30,5 +32,34 @@ func TestUpdateAssetSelection(t *testing.T) {
 	}
 	if got := matchUpdateAsset(updater.CheckRequest{Platform: "windows", Arch: "amd64"}, assets[:4]); got != -1 {
 		t.Fatal("selected an installer or unrelated asset")
+	}
+}
+
+func TestOnlySystemInstallersAreNotUpdatePayloads(t *testing.T) {
+	prefix := appConfig.BinaryName + "-v1.2.3"
+	for _, tc := range []struct{ platform, arch, ext string }{
+		{"linux", "amd64", ".deb"}, {"darwin", "arm64", ".pkg"},
+	} {
+		asset := gh.ReleaseAsset{Name: prefix + "-" + tc.platform + "-" + tc.arch + tc.ext}
+		if got := matchUpdateAsset(updater.CheckRequest{Platform: tc.platform, Arch: tc.arch}, []gh.ReleaseAsset{asset}); got != -1 {
+			t.Fatal("installer selected", asset.Name)
+		}
+	}
+}
+
+func TestSystemInstallUpdatePolicy(t *testing.T) {
+	for _, tc := range []struct {
+		platform, executable string
+		managed              bool
+	}{
+		{"linux", "/usr/bin/my-app", true},
+		{"linux", "/home/user/my-app", false},
+		{"darwin", "/Applications/my-app.app/Contents/MacOS/my-app", true},
+		{"darwin", "/Users/user/my-app.app/Contents/MacOS/my-app", false},
+		{"windows", `C:\Users\user\AppData\Local\Programs\my-app\my-app.exe`, false},
+	} {
+		if got := systemInstallHint(tc.platform, tc.executable, "my-app") != ""; got != tc.managed {
+			t.Fatalf("%s: managed=%v", tc.executable, got)
+		}
 	}
 }

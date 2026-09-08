@@ -151,6 +151,8 @@ tasks:
       - task: generate:aur
 
   generate:deb:
+    env:
+      GOARCH: '{{.ARCH | default ARCH}}'
     summary: Creates a deb package
     cmds:
       - wails3 tool package -name "{{.APP_NAME}}" -format deb -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin

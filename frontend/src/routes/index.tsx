@@ -109,7 +109,7 @@ function Home() {
   const checkUpdate = async () => {
     setSaving('update')
     try {
-      setNotice('正在打开更新窗口…')
+      setNotice(state?.updateInstallHint ? '正在打开版本下载页面，请选择对应系统和架构的安装包' : '正在打开更新窗口…')
       await DesktopService.CheckForUpdates()
     } catch (error) {
       setNotice(errorMessage(error))
@@ -213,7 +213,7 @@ function Home() {
               <Download className='size-4' />
               自动更新
             </CardTitle>
-            <CardDescription>GitHub Releases + SHA256SUMS。</CardDescription>
+            <CardDescription>{state?.updateInstallHint || 'GitHub Releases + SHA256SUMS。'}</CardDescription>
           </CardHeader>
           <CardContent>
             <InfoRow label='当前版本' value={state ? `v${state.version}` : '-'} />
@@ -225,7 +225,7 @@ function Home() {
               ) : (
                 <RefreshCw data-icon='inline-start' />
               )}
-              检查更新
+              {state?.updateInstallHint ? '下载新版安装包' : '检查更新'}
             </Button>
           </CardContent>
         </Card>

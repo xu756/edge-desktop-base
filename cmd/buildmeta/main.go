@@ -114,12 +114,12 @@ func generate(c project.Config, release bool) error {
 	if err = writeChanged("build/linux/desktop", []byte(desktop)); err != nil {
 		return err
 	}
-	for key, value := range map[string]string{"name": c.BinaryName, "version": numeric, "description": c.Description, "vendor": c.CompanyName} {
+	for key, value := range map[string]string{"name": c.BinaryName, "version": version, "description": c.Description, "vendor": c.CompanyName, "maintainer": c.CompanyName, "homepage": "https://github.com/" + c.UpdateRepository} {
 		if err = replace("build/linux/nfpm/nfpm.yaml", `(?m)^`+key+`: "[^"]*"`, fmt.Sprintf("%s: %q", key, value)); err != nil {
 			return err
 		}
 	}
-	contents := fmt.Sprintf("contents:\n  - src: %q\n    dst: %q\n  - src: \"./build/appicon.png\"\n    dst: %q\n  - src: %q\n    dst: %q\n", "./bin/"+c.BinaryName, "/usr/local/bin/"+c.BinaryName, "/usr/share/icons/hicolor/128x128/apps/"+c.BinaryName+".png", "./build/linux/"+c.BinaryName+".desktop", "/usr/share/applications/"+c.BinaryName+".desktop")
+	contents := fmt.Sprintf("contents:\n  - src: %q\n    dst: %q\n    file_info:\n      mode: 0755\n  - src: \"./build/appicon.png\"\n    dst: %q\n    file_info:\n      mode: 0644\n  - src: %q\n    dst: %q\n    file_info:\n      mode: 0644\n", "./bin/"+c.BinaryName, "/usr/bin/"+c.BinaryName, "/usr/share/icons/hicolor/128x128/apps/"+c.BinaryName+".png", "./build/linux/"+c.BinaryName+".desktop", "/usr/share/applications/"+c.BinaryName+".desktop")
 	if err = replace("build/linux/nfpm/nfpm.yaml", `(?ms)^contents:\n.*?\n\n`, contents+"\n"); err != nil {
 		return err
 	}
