@@ -10,14 +10,13 @@
 - 开机自启动，可选择显示主窗口或后台运行（macOS SMAppService 除外）
 - 系统托盘：打开主窗口、检查更新、退出
 - 可配置关闭窗口时隐藏到托盘
-- GitHub Releases 自动更新，每 6 小时检查一次
-- Release 使用 `SHA256SUMS` 校验下载文件
-- 前端通过 Wails bindings 直接调用 Go Service
 - Gin 本地服务与 WebSocket `/ws` 示例，仅监听 `127.0.0.1:19876`
 - WebSocket 仅允许 Wails/loopback 页面 Origin，并限制单条消息大小为 1 MiB
 - WebView 内容区域默认禁止 HTML 拖拽和文本拖选；原生系统标题栏仍可正常移动窗口
-- GitHub Actions 只在发布 `v*` tag 时构建 Windows/Linux/macOS 并创建 GitHub Release
-- 可选将 GitHub Actions 已构建的同一批 Release 产物直接同步到 CNB Release，CNB 不再重复构建
+- GitHub Actions 负责 Windows/Linux/macOS 构建，源码仓库可以保持私有
+- 最终分发只走公开 CNB 仓库，不创建 GitHub Release
+- 自定义 CNB updater provider，运行时不依赖 GitHub API / GitHub Releases
+- 更新二进制使用 SHA-256 校验
 
 ## 开发
 
@@ -43,36 +42,168 @@ ws://127.0.0.1:19876/ws
 GET http://127.0.0.1:19876/health
 ```
 
-## 发布与自动更新
+## 项目级配置
 
-Actions 不响应 `main`/功能分支 push，也不提供手动构建入口。只有推送符合语义化版本格式的 `v*` tag 才会执行发布构建。建议始终在最新 `main` 提交上创建发布 tag：
-
-```bash
-git checkout main
-git pull --ff-only origin main
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-也支持预发布 tag，例如：
+统一入口是 `project/app.json`。复制底座开发新程序时优先只修改这里，然后执行：
 
 ```bash
-git tag v0.3.0-beta.1
-git push origin v0.3.0-beta.1
+go run ./cmd/buildmeta
 ```
 
-构建时会直接读取 tag：`v0.2.0` 会注入为应用版本 `0.2.0`，同时同步到 Wails `build/config.yml`、Windows 版本资源、NSIS 元信息、macOS plist 和 Linux nfpm 元信息。运行时版本不带前导 `v`，与 Wails GitHub updater 的版本规则一致。
+当前示例：
 
-版本号只由 Git Tag、Release 和应用/安装包元数据表达，发布文件名保持固定，不重复包含版本号。这样不同版本的下载路径结构、自动化脚本和 updater asset matcher 都保持稳定。
+```json
+{
+  "name": "edgeinfer-node-test",
+  "binaryName": "edgeinfer-node-test",
+  "identifier": "io.github.xu756.edge-desktop-base",
+  "configDirName": "edgeinfer-node-test",
+  "legacyConfigDirNames": ["edge-desktop-base"],
+  "description": "Reusable Wails v3 desktop application foundation",
+  "companyName": "xu756",
+  "copyright": "(c) 2026, xu756",
+  "updateRepositoryURL": "https://cnb.cool/xu756/public",
+  "updateBranch": "main",
+  "defaultAPIAddress": "127.0.0.1:19876",
+  "devVersion": "0.1.0"
+}
+```
 
-当前 GitHub Actions 自动发布目标：
+| 字段 | 用途 |
+| --- | --- |
+| `name` | 主窗口、托盘、界面及安装包显示名称 |
+| `binaryName` | 可执行文件、`.app`、CNB Release Tag 和分发文件名前缀 |
+| `identifier` | 单实例、自启动及平台应用标识 |
+| `configDirName` | `~/.config` 下的配置目录名 |
+| `legacyConfigDirNames` | 需要迁移的旧配置目录名 |
+| `updateRepositoryURL` | 公开 CNB 分发仓库，例如 `https://cnb.cool/xu756/public` |
+| `updateBranch` | CNB 分发仓库保存 manifest 的分支，默认 `main` |
+| `companyName` / `description` / `copyright` | 平台资源与安装包元信息 |
+| `defaultAPIAddress` | 本地 API 地址，只允许 loopback IP |
+| `devVersion` | 本地开发版本；正式 Release 版本来自 Git Tag |
 
-- Windows amd64：应用更新 EXE + 用户级 NSIS installer
-- Linux amd64：应用更新二进制 + DEB installer
-- macOS arm64：应用更新 ZIP + PKG installer
-- macOS amd64：Task 已支持，但 Actions matrix 当前暂时注释，不自动发布
+`buildmeta` 会同步 Wails 配置、Windows 版本资源、NSIS 元信息、macOS plist、Linux desktop/nfpm 元信息、网页标题等。根 `Taskfile.yml` 的 `APP_NAME` 直接读取 `project/app.json` 的 `binaryName`，不需要另外改名。
 
-每个正式 Release 使用固定资产名：
+需要换品牌图标时替换 `build/appicon.png`。
+
+## 发布架构
+
+GitHub 源码仓库可以是私有仓库。GitHub Actions 仅负责构建，不承担最终分发：
+
+```text
+GitHub 私有源码仓库
+        │
+        │ push v0.2.0
+        ▼
+GitHub Actions
+  ├─ Windows amd64
+  ├─ Linux amd64
+  └─ macOS arm64
+        │
+        ├─ 生成 SHA256SUMS
+        │
+        ▼
+公开 CNB 分发仓库
+https://cnb.cool/xu756/public
+```
+
+CNB 不需要 `.cnb.yml`，也不重复构建应用。
+
+GitHub Actions 的临时 artifacts 只用于三个 runner 之间汇总，最终版本不会创建 GitHub Release。
+
+### 版本命名
+
+业务源码仓库仍使用普通语义化版本 Tag：
+
+```text
+v0.0.1
+v0.0.2
+v0.1.0
+v0.2.0-beta.1
+```
+
+发布到共享 CNB 分发仓库时自动加入 `binaryName` 命名空间：
+
+```text
+edgeinfer-node-test-v0.0.1
+edgeinfer-node-test-v0.0.2
+edgeinfer-node-test-v0.1.0
+edgeinfer-node-test-v0.2.0-beta.1
+```
+
+因此同一个公开仓库可以同时分发多个程序：
+
+```text
+edgeinfer-node-test-v0.0.2
+another-desktop-app-v1.3.0
+camera-client-v2.1.4
+```
+
+客户端不会使用 CNB 仓库级的 `latest Release` 判断版本，因为共享仓库中另一个程序发布后会改变全局 latest。
+
+### CNB 仓库目录
+
+CNB Git 仓库只保存很小的 JSON 更新元数据，不提交构建二进制，也不会把 GitHub 私有源码复制过去。
+
+稳定版本示例：
+
+```text
+edgeinfer-node-test/
+├── latest.json
+├── v0.0.1/
+│   └── manifest.json
+├── v0.0.2/
+│   └── manifest.json
+└── v0.1.0/
+    └── manifest.json
+```
+
+预发布版本还会维护：
+
+```text
+edgeinfer-node-test/prerelease.json
+```
+
+正式客户端默认只读取 `latest.json`，不会因为发布 `v0.2.0-beta.1` 自动升级到预发布版本。
+
+`manifest.json` 示例：
+
+```json
+{
+  "schemaVersion": 1,
+  "app": "edgeinfer-node-test",
+  "version": "0.0.2",
+  "tag": "edgeinfer-node-test-v0.0.2",
+  "channel": "stable",
+  "publishedAt": "2026-09-08T12:00:00Z",
+  "artifacts": [
+    {
+      "kind": "runtime",
+      "platform": "windows",
+      "arch": "amd64",
+      "filename": "edgeinfer-node-test-windows-amd64.exe",
+      "sha256": "...",
+      "size": 12345678
+    },
+    {
+      "kind": "installer",
+      "platform": "windows",
+      "arch": "amd64",
+      "filename": "edgeinfer-node-test-windows-amd64-installer.exe",
+      "sha256": "...",
+      "size": 12345678
+    }
+  ]
+}
+```
+
+每个历史版本目录中的 `manifest.json` 保留该版本记录；`latest.json` 是当前稳定版本 manifest 的副本。
+
+### 二进制存储
+
+大文件只作为对应 CNB Release 的附件，不提交到 Git 历史。
+
+以 `edgeinfer-node-test-v0.0.2` 为例：
 
 ```text
 edgeinfer-node-test-windows-amd64.exe
@@ -84,32 +215,170 @@ edgeinfer-node-test-darwin-arm64.pkg
 SHA256SUMS
 ```
 
-如果以后重新启用 macOS Intel matrix，还会额外发布：
+文件名本身不重复携带版本号；版本由 namespaced CNB Release Tag 和 manifest 表达。
+
+如果以后恢复 macOS Intel 构建，还会增加：
 
 ```text
 edgeinfer-node-test-darwin-amd64.zip
 edgeinfer-node-test-darwin-amd64.pkg
 ```
 
-### 同步发布到 CNB
+## 自动更新流程
 
-CNB 不再使用 `.cnb.yml` 构建应用。GitHub Actions 在三个桌面平台全部构建完成后，只生成一次 `SHA256SUMS`，先发布 GitHub Release，再把 `release/` 目录中的**同一批文件**同步到同 Tag 的 CNB Release。CNB 因此不需要 Runner，也不会发生 GitHub/CNB 两边分别编译导致的产物差异。
+运行时不再使用：
 
-如需开启同步，在 GitHub 仓库 `Settings → Secrets and variables → Actions` 配置：
+```go
+github.com/wailsapp/wails/v3/pkg/updater/providers/github
+```
 
-- Repository variable `CNB_REPO_SLUG`：CNB 完整仓库路径，例如 `xu756/edgeinfer-node-test`。
-- Repository secret `CNB_TOKEN`：CNB **访问令牌**，需要目标仓库 Release 读写权限 `repo-release:rw`；不要使用只读部署令牌。
-- Repository variable `CNB_TARGET_BRANCH`：可选，CNB Release 对应的目标分支；未设置时默认 `main`。
+项目自己的 `server/cnb_updater.go` 实现 Wails `updater.Provider`。
 
-未配置 `CNB_REPO_SLUG` 时，GitHub Actions 会直接跳过 CNB 同步，GitHub Release 正常发布。配置了 `CNB_REPO_SLUG` 后，如果 `CNB_TOKEN` 缺失、权限不足或 CNB API 上传失败，Release job 会失败并明确暴露同步错误。
+检查流程：
 
-同步逻辑位于 `scripts/publish-cnb-release.py`：CNB Release 不存在时创建，已存在时直接复用，并覆盖上传同名附件；正式版本和 `v1.2.3-beta.1` 这类 prerelease 都会按 Git Tag 同步。附件通过 CNB OpenAPI 的预签名上传地址直接上传，不经过 CNB 构建流水线。
+```text
+当前程序版本 0.0.1
+       │
+       ▼
+GET
+https://cnb.cool/xu756/public/-/git/raw/main/edgeinfer-node-test/latest.json
+       │
+       ▼
+校验：
+- schemaVersion
+- app == edgeinfer-node-test
+- tag == edgeinfer-node-test-v<version>
+- semver 新于当前版本
+- platform / arch
+- runtime 精确文件名
+- SHA-256 格式
+       │
+       ▼
+下载
+https://cnb.cool/xu756/public/-/releases/download/
+edgeinfer-node-test-v0.0.2/edgeinfer-node-test-windows-amd64.exe
+       │
+       ▼
+Wails 校验 SHA-256
+       │
+       ▼
+Wails 原子替换 + 重启
+```
 
-更新器严格精确匹配 `<binaryName>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名）。版本判断来自 GitHub Release Tag，而不是文件名；安装包、旧版带版本号资产、签名和其他附件都不会被选为自动更新 payload。下载内容继续使用同一 Release 中的 `SHA256SUMS` 校验。
+一个程序永远只读取自己的：
 
-生产发布前建议补 Windows Authenticode 与 macOS Developer ID / notarization。SHA-256 能校验文件完整性，但代码签名仍然是正式分发时需要补齐的一层。
+```text
+<binaryName>/latest.json
+```
 
-`build/appicon.png` 继续作为应用和托盘图标源，需要换品牌时替换这个源文件即可。
+并要求：
+
+```text
+manifest.app == <binaryName>
+manifest.tag == <binaryName>-v<manifest.version>
+```
+
+所以共享分发仓库中其他项目的 Release 不会参与当前程序的版本判断。
+
+## DEB / PKG 更新策略
+
+系统安装位置继续交给系统安装包管理，不做应用内文件覆盖：
+
+- Linux `/usr/bin/<binaryName>`：下载新版 `.deb` 安装升级
+- macOS `/Applications/<binaryName>.app`：下载新版 `.pkg` 安装升级
+
+点击“检查更新”时会读取该程序自己的 CNB `latest.json`，然后打开对应的 CNB Release 页面。
+
+用户目录中的免安装 Windows EXE、Linux binary、macOS `.app` 仍使用应用内自动更新。
+
+## GitHub Actions 配置
+
+在私有源码仓库：
+
+```text
+Settings
+→ Secrets and variables
+→ Actions
+```
+
+建议配置：
+
+### Repository variables
+
+```text
+CNB_REPO_URL=https://cnb.cool/xu756/public
+CNB_TARGET_BRANCH=main
+CNB_USERNAME=cnb
+```
+
+其中 `CNB_REPO_URL` / `CNB_TARGET_BRANCH` 如果配置，必须与 `project/app.json` 保持一致，脚本会主动校验，防止把私有项目产物误传到错误仓库。
+
+`CNB_USERNAME` 可以不配置，默认就是：
+
+```text
+cnb
+```
+
+### Repository secret
+
+```text
+CNB_TOKEN=<CNB Access Token>
+```
+
+这里使用 CNB **访问令牌**，不是 CNB 登录账号密码，也不要使用只读部署令牌。访问令牌需要对目标公开分发仓库具备 Git 写入和 Release 写入权限。
+
+`CNB_TOKEN` 仅存在 GitHub Actions Secrets 中，不会编译进客户端，也不会写入公开 manifest。
+
+发布脚本使用：
+
+- CNB OpenAPI 创建/复用 namespaced Release
+- CNB OpenAPI 上传 Release 附件
+- HTTPS Git + Access Token 更新 `<binaryName>/...` JSON manifest
+
+manifest 始终在全部 Release 附件上传成功后才提交，避免客户端看到一个指向未完整上传版本的 `latest.json`。
+
+## 发布一个版本
+
+始终从最新 `main` 创建 Tag：
+
+```bash
+git checkout main
+git pull --ff-only origin main
+
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+最终 CNB 中会得到：
+
+```text
+Release Tag:
+edgeinfer-node-test-v0.2.0
+
+Git metadata:
+edgeinfer-node-test/v0.2.0/manifest.json
+edgeinfer-node-test/latest.json
+```
+
+如果发布：
+
+```bash
+git tag v0.3.0-beta.1
+git push origin v0.3.0-beta.1
+```
+
+则得到：
+
+```text
+Release Tag:
+edgeinfer-node-test-v0.3.0-beta.1
+
+Git metadata:
+edgeinfer-node-test/v0.3.0-beta.1/manifest.json
+edgeinfer-node-test/prerelease.json
+```
+
+不会覆盖稳定版 `latest.json`。
 
 ## 用户配置与自启动
 
@@ -118,9 +387,9 @@ CNB 不再使用 `.cnb.yml` 构建应用。GitHub Actions 在三个桌面平台�
 - Windows：`%USERPROFILE%\.config\edgeinfer-node-test\settings.json`
 - macOS / Linux：`~/.config/edgeinfer-node-test/settings.json`
 
-这里明确使用用户主目录，不跟随 `XDG_CONFIG_HOME`。新文件不存在时，会从平台原 `os.UserConfigDir()` 位置以及 `~/.config` 下的旧目录迁移；旧目录名来自 `legacyConfigDirNames`。迁移保留原文件、不覆盖已有的新文件；损坏的旧配置也保留并报告错误。
+这里明确使用用户主目录，不跟随 `XDG_CONFIG_HOME`。新文件不存在时，会从平台原 `os.UserConfigDir()` 位置以及 `~/.config` 下的旧目录迁移；旧目录名来自 `legacyConfigDirNames`。迁移保留原文件、不覆盖已有的新文件。
 
-界面展示实际配置路径。默认内容：
+默认内容：
 
 ```json
 {
@@ -131,40 +400,13 @@ CNB 不再使用 `.cnb.yml` 构建应用。GitHub Actions 在三个桌面平台�
 }
 ```
 
-`autoCheckUpdates` 控制定时检查，关闭后仍可手动检查；`updateIntervalHours` 允许 1–168 小时。手动编辑配置后重启生效。旧配置缺失的新字段采用默认值；无法读取或格式错误时使用默认设置，界面提示错误且禁止覆盖原文件，修复文件后重启。
+`autoCheckUpdates` 控制定时检查，关闭后仍可手动检查；`updateIntervalHours` 允许 1–168 小时。
 
-“开机自动启动”以操作系统注册状态为准，不在 JSON 中重复保存启用状态。“自启动时显示主窗口”保存在 JSON 中，可在开启自启动前设置；已开启时修改会同步更新注册参数。Windows/Linux 及 macOS LaunchAgent 使用 `--autostart`，后台模式额外携带 `--hidden`；普通手动启动仍显示窗口。单独使用 `--hidden` 也保持兼容。更改可执行文件位置后应重新开启自启动以更新注册路径。
+“开机自动启动”以操作系统注册状态为准，不在 JSON 中重复保存启用状态。“自启动时显示主窗口”保存在 JSON 中，可在开启自启动前设置。
 
 **macOS 限制：** 当前 Wails beta.17 在 macOS 13+ 的打包 `.app` 中使用 SMAppService，忽略自定义参数；该模式下窗口开关会禁用并提示，由系统决定启动窗口行为。
 
-更新窗口模板位于 `server/updater-window.html`，基于 Wails beta.17 的 MIT 模板做中文化和样式定制。修改品牌、颜色或文案可直接编辑该文件；升级 Wails 时需核对事件协议和 runtime-ready 握手。Actions 仍仅由版本 tag 触发，Windows 构建额外生成用户级 NSIS 安装包。
-
-## 项目级配置（开发者修改）
-
-统一入口是 `project/app.json`。它随源码构建进程序，不是用户运行时的 `settings.json`，不应放密钥。
-
-| 字段 | 用途 |
-| --- | --- |
-| `name` | 主窗口、托盘、界面及安装包显示名称 |
-| `binaryName` | 可执行文件、`.app` 和 Release 文件名前缀，使用小写字母、数字、连字符 |
-| `identifier` | 单实例、自启动及平台应用标识 |
-| `configDirName` | `~/.config` 下的配置目录名 |
-| `legacyConfigDirNames` | 需要迁移的旧配置目录名，按顺序查找 |
-| `updateRepository` | GitHub 更新仓库，格式为 `owner/repo` |
-| `companyName` / `description` / `copyright` | 平台资源与安装包元信息 |
-| `defaultAPIAddress` | 本地 API 地址，只允许 loopback IP |
-| `devVersion` | 本地构建版本；Release 版本仍来自 tag |
-
-修改后可以执行：
-
-```bash
-wails3 task configure
-wails3 task dev
-```
-
-正常桌面构建会自动执行同步。`configure` 更新 Wails 配置、Windows 版本资源和 NSIS 元信息、macOS plist、Linux desktop/nfpm 元信息及网页标题；生成文件无需手工改名。本次统一范围为桌面底座，未接入的 iOS/Android/MSIX 模板不在此流程内。不要用 `wails3 update build-assets` 覆盖定制的 Taskfile/NSIS 脚本；需要升级框架模板时应逐项合并。
-
-仅修改显示名称时，保留 `binaryName`、`identifier`、`configDirName`，这样更新路径、启动项和配置保持连续。复制底座开发独立产品时再更改这些字段。更换 `binaryName` 或更新仓库会影响已发布客户端的资产匹配，不能仅把新 Release 文件改名后就期望旧客户端自动迁移。独立产品不需要继承底座设置时，将 `legacyConfigDirNames` 设为 `[]`。
+更新窗口模板位于 `server/updater-window.html`，基于 Wails beta.17 的 MIT 模板做中文化和样式定制。升级 Wails 时需核对 updater Provider 接口、事件协议和 runtime-ready 握手。
 
 ## Windows 安装包
 
@@ -174,35 +416,33 @@ wails3 task dev
 wails3 task windows:package ARCH=amd64 INSTALL_SCOPE=user
 ```
 
-默认即为 `user`，安装目录为 `%LocalAppData%\Programs\<binaryName>`。安装包创建开始菜单、桌面快捷方式和卸载入口；卸载保留 `~/.config` 中的用户设置，并清理当前用户的应用自启动注册项。
+默认即为 `user`，安装目录为 `%LocalAppData%\Programs\<binaryName>`。
 
-生成两个文件：
+生成：
 
-- `bin/<binaryName>.exe`：应用本体，也是自动更新使用的文件。
-- `bin/<binaryName>-amd64-installer.exe`：首次安装用的 NSIS 安装包。
+- `bin/<binaryName>.exe`：运行文件，也是便携版自动更新 payload
+- `bin/<binaryName>-amd64-installer.exe`：首次安装 NSIS 包
 
-Actions 自动安装 NSIS，并把两个文件重命名为固定 Release 资产名后一起发布和计算校验和。后续原地更新无需重新运行安装包，要求安装目录对当前用户可写。自行改为机器级安装或选择受保护目录可能导致更新权限不足。原地更新不会重新执行安装脚本，也不会自动刷新 Windows 卸载列表的版本号。
+Actions 会重命名成固定 CNB 分发文件名并计算校验和。
 
 ## Ubuntu DEB 与 macOS PKG
 
-Actions 为 Ubuntu amd64 发布 `.deb`，为 macOS arm64 发布 `.pkg`，并保留对应免安装更新产物。macOS amd64 的 PKG/ZIP Task 仍可本地构建，但当前 Actions matrix 暂停自动发布。所有实际发布的安装包都包含在 `SHA256SUMS` 中。
-
-Ubuntu 本地构建（默认 amd64，可传入实际目标架构）：
+Ubuntu 本地构建：
 
 ```bash
 wails3 task linux:create:deb ARCH=amd64
 sudo apt install ./bin/edgeinfer-node-test.deb
 ```
 
-DEB 面向 Ubuntu 24.04+，依赖 `libgtk-4-1` 和 `libwebkitgtk-6.0-4`。程序安装到 `/usr/bin/<binaryName>`，应用菜单与图标安装到 `/usr/share`；卸载不删除用户目录中的配置。新版本通过再次安装新版 DEB 升级；仅下载 GitHub DEB 并不会自动配置 APT 软件源。
+DEB 面向 Ubuntu 24.04+，程序安装到 `/usr/bin/<binaryName>`，配置仍保存在用户目录。
 
-macOS 本地构建（必须在 macOS 上安装 Xcode Command Line Tools）：
+macOS 本地构建：
 
 ```bash
 wails3 task darwin:package:pkg ARCH=arm64
 # Intel Mac 如需本地构建可使用 ARCH=amd64
 ```
 
-生成 `bin/<binaryName>-<arch>.pkg`，双击安装到 `/Applications/<binaryName>.app`。构建使用 `pkgbuild`，禁用 bundle relocation，避免安装器误将 Downloads 下的旧副本作为目标。PKG 本身尚未使用 Developer ID Installer 证书签名或公证，内部 `.app` 沿用现有 ad-hoc 签名；正式公开分发需配置相应签名与公证，否则可能被 Gatekeeper 阻止。
+生成 `bin/<binaryName>-<arch>.pkg`，安装到 `/Applications/<binaryName>.app`。
 
-**更新行为：** `/usr/bin` 下的本应用和 `/Applications` 下的应用禁用自动原地替换；界面显示“下载新版安装包”，点击主界面或托盘的更新入口会打开 Releases 下载页面。使用新版 DEB/PKG 升级，保持权限和系统安装记录一致。用户目录中的免安装二进制 / `.app` 仍使用原来的应用内更新。用户配置路径仍为 `~/.config/<configDirName>/settings.json`。
+生产公开分发前仍建议补 Windows Authenticode 与 macOS Developer ID / notarization。SHA-256 能校验下载完整性，但不能代替平台代码签名。
