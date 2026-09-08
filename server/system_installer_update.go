@@ -158,7 +158,6 @@ func userDownloadsDir() (string, error) {
 				if value := strings.TrimSpace(string(output)); value != "" {
 					return value, nil
 				}
-			}
 		}
 	}
 	home, err := os.UserHomeDir()
@@ -166,24 +165,4 @@ func userDownloadsDir() (string, error) {
 		return "", fmt.Errorf("resolve user home: %w", err)
 	}
 	return filepath.Join(home, "Downloads"), nil
-}
-
-// launchSystemInstaller opens the native package installer. It intentionally
-// does not bypass OS authentication: DEB/PKG upgrades may still ask the user
-// for administrator approval, but no browser/manual download step is needed.
-func launchSystemInstaller(platform, path string) error {
-	switch platform {
-	case "darwin":
-		return exec.Command("open", path).Start()
-	case "linux":
-		if tool, err := exec.LookPath("xdg-open"); err == nil {
-			return exec.Command(tool, path).Start()
-		}
-		if tool, err := exec.LookPath("gio"); err == nil {
-			return exec.Command(tool, "open", path).Start()
-		}
-		return fmt.Errorf("installer downloaded to %s, but no desktop opener was found", path)
-	default:
-		return fmt.Errorf("system installer launch is unsupported on %s", platform)
-	}
 }
