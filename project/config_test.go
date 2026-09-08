@@ -14,7 +14,11 @@ func TestProjectConfigValidation(t *testing.T) {
 		value any
 	}{
 		{"binaryName", "../bad"}, {"configDirName", "../bad"}, {"legacyConfigDirNames", []string{"../bad"}},
-		{"name", `bad$injection`}, {"identifier", "bad id"}, {"updateRepository", "https://example.com"},
+		{"name", `bad$injection`}, {"identifier", "bad id"},
+		{"updateRepositoryURL", "http://cnb.cool/xu756/public"},
+		{"updateRepositoryURL", "https://cnb.cool"},
+		{"updateRepositoryURL", "https://user:password@cnb.cool/xu756/public"},
+		{"updateBranch", "../main"}, {"updateBranch", "main..bad"},
 		{"defaultAPIAddress", "0.0.0.0:19876"}, {"devVersion", "1.2.3-beta.01"}, {"devVersion", "65536.0.0"},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
@@ -28,6 +32,7 @@ func TestProjectConfigValidation(t *testing.T) {
 		})
 	}
 }
+
 func TestPrereleaseNumericVersion(t *testing.T) {
 	got, err := NumericVersion("1.2.3-beta.1+build.4")
 	if err != nil || got != "1.2.3" {
