@@ -95,16 +95,34 @@ func (s *Server) performPrivilegedRuntimeUpdate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("install command not found: %w", err)
 	}
-	args := []string{"-m", "0755", staged, target}
+	mvTool, err := exec.LookPath("mv")
+	if err != nil {
+		return fmt.Errorf("mv command not found: %w", err)
+	}
+
+	// Write beside the target first, then atomically rename over the running
+	// executable. Linux keeps the old inode alive for the current process, so
+	// the next launch sees the new binary without risking a text-file-busy write.
+	script := `set -eu
+src="$1"
+dst="$2"
+install_tool="$3"
+mv_tool="$4"
+tmp="${dst}.update.$$"
+trap 'rm -f "$tmp"' EXIT
+"$install_tool" -m 0755 "$src" "$tmp"
+"$mv_tool" -f "$tmp" "$dst"
+trap - EXIT`
+	args := []string{"/bin/sh", "-c", script, "update-runtime", staged, target, installTool, mvTool}
 	var cmd *exec.Cmd
 	if os.Geteuid() == 0 {
-		cmd = exec.CommandContext(ctx, installTool, args...)
+		cmd = exec.CommandContext(ctx, args[0], args[1:]...)
 	} else {
 		pkexec, err := exec.LookPath("pkexec")
 		if err != nil {
 			return fmt.Errorf("pkexec not found; PolicyKit is required to update %s: %w", target, err)
 		}
-		cmd = exec.CommandContext(ctx, pkexec, append([]string{installTool}, args...)...)
+		cmd = exec.CommandContext(ctx, pkexec, args...)
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
