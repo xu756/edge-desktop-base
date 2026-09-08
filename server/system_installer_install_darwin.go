@@ -35,11 +35,8 @@ func scheduleSystemAppRestart(executable string) error {
 	}
 	bundle := executable[:index]
 	pid := strconv.Itoa(os.Getpid())
-	cmd := exec.Command(
-		"/bin/sh", "-c",
-		`pid="$1"; app="$2"; while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done; exec /usr/bin/open "$app" >/dev/null 2>&1`,
-		"restart-app", pid, bundle,
-	)
+	script := "pid=\"$1\"; app=\"$2\"; while kill -0 \"$pid\" 2>/dev/null; do sleep 0.2; done; exec /usr/bin/open \"$app\" >/dev/null 2>&1"
+	cmd := exec.Command("/bin/sh", "-c", script, "restart-app", pid, bundle)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("schedule app restart: %w", err)
