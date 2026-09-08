@@ -100,7 +100,7 @@ func (s *LocalServer) handleWebSocket(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := wsjson.Write(ctx, conn, map[string]any{
-		"type": "runtime.ready",
+		"type":    "runtime.ready",
 		"payload": map[string]any{"version": Version},
 	}); err != nil {
 		return
