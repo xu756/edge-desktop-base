@@ -7,7 +7,8 @@
   "description": "Reusable Wails v3 desktop application foundation",
   "companyName": "xu756",
   "copyright": "(c) 2026, xu756",
-  "updateRepository": "xu756/edgeinfer-node-test",
+  "updateRepositoryURL": "https://cnb.cool/xu756/public",
+  "updateBranch": "main",
   "defaultAPIAddress": "127.0.0.1:19876",
   "devVersion": "0.1.0"
 }
