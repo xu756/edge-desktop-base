@@ -23,6 +23,16 @@ func (s *Server) StartUpdateCfg() error {
 		CurrentVersion: Version,
 		Providers:      []updater.Provider{provider},
 		CheckInterval:  updateInterval,
+		Window: &updater.BuiltinWindow{
+			CSS: `:root { --accent: #ff6f00; --radius: 16px; }`,
+			Options: updater.WindowOptions{
+				Title:         "检查更新",
+				Width:         400,
+				Height:        200,
+				AlwaysOnTop:   true,
+				DisableResize: true,
+			},
+		},
 	})
 }
 

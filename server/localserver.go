@@ -10,13 +10,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const maxWebSocketMessageSize = 1 << 20
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 type LocalServerStatus struct {
 	Address string `json:"address"`
@@ -94,35 +101,26 @@ func (s *LocalServer) WebSocketURL() string {
 }
 
 func (s *LocalServer) handleWebSocket(c *gin.Context) {
-	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
-		OriginPatterns: []string{
-			"wails.localhost",
-			"wails.localhost:*",
-			"localhost",
-			"localhost:*",
-			"127.0.0.1",
-			"127.0.0.1:*",
-		},
-	})
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
+		log.Println(err)
 		return
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "closed")
-	conn.SetReadLimit(maxWebSocketMessageSize)
+	defer conn.Close()
 
-	ctx := c.Request.Context()
-	if err := wsjson.Write(ctx, conn, map[string]any{
+	if err := conn.WriteJSON(map[string]any{
 		"type":    "runtime.ready",
 		"payload": map[string]any{"version": Version},
 	}); err != nil {
 		return
 	}
 	for {
-		var message any
-		if err := wsjson.Read(ctx, conn, &message); err != nil {
-			return
+		var message interface{}
+		err := conn.ReadJSON(message)
+		if err != nil {
+			break
 		}
-		if err := wsjson.Write(ctx, conn, map[string]any{"type": "echo", "payload": message}); err != nil {
+		if err := conn.WriteJSON(map[string]any{"type": "echo", "payload": message}); err != nil {
 			return
 		}
 	}
