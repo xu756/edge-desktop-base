@@ -16,8 +16,8 @@
 - Gin 本地服务与 WebSocket `/ws` 示例，仅监听 `127.0.0.1:19876`
 - WebSocket 仅允许 Wails/loopback 页面 Origin，并限制单条消息大小为 1 MiB
 - WebView 内容区域默认禁止 HTML 拖拽和文本拖选；原生系统标题栏仍可正常移动窗口
-- GitHub Actions 只在发布 `v*` tag 时构建 Windows/Linux/macOS 并创建 Release
-- CNB 通过根目录 `.cnb.yml` 在 `v*` tag 时构建 Linux amd64 并创建 CNB Release
+- GitHub Actions 只在发布 `v*` tag 时构建 Windows/Linux/macOS 并创建 GitHub Release
+- 可选将 GitHub Actions 已构建的同一批 Release 产物直接同步到 CNB Release，CNB 不再重复构建
 
 ## 开发
 
@@ -91,13 +91,19 @@ edgeinfer-node-test-darwin-amd64.zip
 edgeinfer-node-test-darwin-amd64.pkg
 ```
 
-CNB 使用同样的固定命名规则，目前公共 CNB Runner 构建 Linux amd64：
+### 同步发布到 CNB
 
-```text
-edgeinfer-node-test-linux-amd64
-edgeinfer-node-test-linux-amd64.deb
-SHA256SUMS
-```
+CNB 不再使用 `.cnb.yml` 构建应用。GitHub Actions 在三个桌面平台全部构建完成后，只生成一次 `SHA256SUMS`，先发布 GitHub Release，再把 `release/` 目录中的**同一批文件**同步到同 Tag 的 CNB Release。CNB 因此不需要 Runner，也不会发生 GitHub/CNB 两边分别编译导致的产物差异。
+
+如需开启同步，在 GitHub 仓库 `Settings → Secrets and variables → Actions` 配置：
+
+- Repository variable `CNB_REPO_SLUG`：CNB 完整仓库路径，例如 `xu756/edgeinfer-node-test`。
+- Repository secret `CNB_TOKEN`：CNB **访问令牌**，需要目标仓库 Release 读写权限 `repo-release:rw`；不要使用只读部署令牌。
+- Repository variable `CNB_TARGET_BRANCH`：可选，CNB Release 对应的目标分支；未设置时默认 `main`。
+
+未配置 `CNB_REPO_SLUG` 时，GitHub Actions 会直接跳过 CNB 同步，GitHub Release 正常发布。配置了 `CNB_REPO_SLUG` 后，如果 `CNB_TOKEN` 缺失、权限不足或 CNB API 上传失败，Release job 会失败并明确暴露同步错误。
+
+同步逻辑位于 `scripts/publish-cnb-release.py`：CNB Release 不存在时创建，已存在时直接复用，并覆盖上传同名附件；正式版本和 `v1.2.3-beta.1` 这类 prerelease 都会按 Git Tag 同步。附件通过 CNB OpenAPI 的预签名上传地址直接上传，不经过 CNB 构建流水线。
 
 更新器严格精确匹配 `<binaryName>-<平台>-<架构>` 形式的运行文件（Windows 为 `.exe`，macOS 为 `.zip`，Linux 无扩展名）。版本判断来自 GitHub Release Tag，而不是文件名；安装包、旧版带版本号资产、签名和其他附件都不会被选为自动更新 payload。下载内容继续使用同一 Release 中的 `SHA256SUMS` 校验。
 
