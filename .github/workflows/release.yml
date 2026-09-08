@@ -53,10 +53,10 @@ jobs:
             platform: darwin
             arch: arm64
             task: darwin:package:pkg
-          - runner: macos-15-intel
-            platform: darwin
-            arch: amd64
-            task: darwin:package:pkg
+          # - runner: macos-15-intel
+          #   platform: darwin
+          #   arch: amd64
+          #   task: darwin:package:pkg
 
     runs-on: ${{ matrix.runner }}
     env:
