@@ -37,11 +37,19 @@ func replace(path, pattern, replacement string) error {
 	if err != nil {
 		return err
 	}
+	// Git may check out text files with CRLF on Windows. Match against LF,
+	// then restore the input's newline style to avoid mixed line endings.
+	crlf := bytes.Contains(data, []byte("\r\n"))
+	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
 	re := regexp.MustCompile(pattern)
 	if !re.Match(data) {
 		return fmt.Errorf("metadata field missing in %s: %s", path, pattern)
 	}
-	return writeChanged(path, re.ReplaceAllFunc(data, func([]byte) []byte { return []byte(replacement) }))
+	updated := re.ReplaceAllFunc(data, func([]byte) []byte { return []byte(replacement) })
+	if crlf {
+		updated = bytes.ReplaceAll(updated, []byte("\n"), []byte("\r\n"))
+	}
+	return writeChanged(path, updated)
 }
 
 func xmlText(value string) string {
