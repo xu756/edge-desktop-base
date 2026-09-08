@@ -1,6 +1,7 @@
-package server
+package desktop
 
 import (
+	"changeme/server/localapi"
 	"errors"
 	"fmt"
 	"runtime"
@@ -10,27 +11,27 @@ import (
 )
 
 type DesktopState struct {
-	Name                     string            `json:"name"`
-	Version                  string            `json:"version"`
-	Commit                   string            `json:"commit"`
-	BuildTime                string            `json:"buildTime"`
-	Platform                 string            `json:"platform"`
-	Architecture             string            `json:"architecture"`
-	AutoStart                bool              `json:"autoStart"`
-	AutoStartShowWindow      bool              `json:"autoStartShowWindow"`
-	AutoStartWindowSupported bool              `json:"autoStartWindowSupported"`
-	ConfigPath               string            `json:"configPath"`
-	ConfigError              string            `json:"configError,omitempty"`
-	AutoStartError           string            `json:"autoStartError,omitempty"`
-	CloseToTray              bool              `json:"closeToTray"`
-	TrayReady                bool              `json:"trayReady"`
-	AutoCheckUpdates         bool              `json:"autoCheckUpdates"`
-	AutoDownloadUpdates      bool              `json:"autoDownloadUpdates"`
-	UpdateRepositoryURL      string            `json:"updateRepositoryURL"`
-	UpdateInstallHint        string            `json:"updateInstallHint,omitempty"`
-	UpdateIntervalHours      int               `json:"updateIntervalHours"`
-	LocalServer              LocalServerStatus `json:"localServer"`
-	WebSocketURL             string            `json:"websocketURL"`
+	Name                     string          `json:"name"`
+	Version                  string          `json:"version"`
+	Commit                   string          `json:"commit"`
+	BuildTime                string          `json:"buildTime"`
+	Platform                 string          `json:"platform"`
+	Architecture             string          `json:"architecture"`
+	AutoStart                bool            `json:"autoStart"`
+	AutoStartShowWindow      bool            `json:"autoStartShowWindow"`
+	AutoStartWindowSupported bool            `json:"autoStartWindowSupported"`
+	ConfigPath               string          `json:"configPath"`
+	ConfigError              string          `json:"configError,omitempty"`
+	AutoStartError           string          `json:"autoStartError,omitempty"`
+	CloseToTray              bool            `json:"closeToTray"`
+	TrayReady                bool            `json:"trayReady"`
+	AutoCheckUpdates         bool            `json:"autoCheckUpdates"`
+	AutoDownloadUpdates      bool            `json:"autoDownloadUpdates"`
+	UpdateRepositoryURL      string          `json:"updateRepositoryURL"`
+	UpdateInstallHint        string          `json:"updateInstallHint,omitempty"`
+	UpdateIntervalHours      int             `json:"updateIntervalHours"`
+	LocalServer              localapi.Status `json:"localServer"`
+	WebSocketURL             string          `json:"websocketURL"`
 }
 
 type DesktopService struct {

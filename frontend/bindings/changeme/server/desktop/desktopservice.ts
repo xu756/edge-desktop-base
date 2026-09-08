@@ -10,36 +10,36 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 export function CheckForUpdates(): $CancellablePromise<void> {
-    return $Call.ByID(2545074965);
+    return $Call.ByID(1628387972);
 }
 
 export function Echo(message: string): $CancellablePromise<string> {
-    return $Call.ByID(3620578863, message);
+    return $Call.ByID(1900927664, message);
 }
 
 export function SetAutoCheckUpdates(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(2957917899, enabled);
+    return $Call.ByID(2647775754, enabled);
 }
 
 export function SetAutoDownloadUpdates(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(3871382773, enabled);
+    return $Call.ByID(3805191626, enabled);
 }
 
 export function SetAutoStart(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(351485835, enabled);
+    return $Call.ByID(1410730328, enabled);
 }
 
 /**
  * SetAutoStartShowWindow updates both the saved preference and an existing registration.
  */
 export function SetAutoStartShowWindow(show: boolean): $CancellablePromise<void> {
-    return $Call.ByID(1039525058, show);
+    return $Call.ByID(1442451505, show);
 }
 
 export function SetCloseToTray(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(321281083, enabled);
+    return $Call.ByID(2040074940, enabled);
 }
 
 export function State(): $CancellablePromise<$models.DesktopState> {
-    return $Call.ByID(929829011);
+    return $Call.ByID(2060267618);
 }

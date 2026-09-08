@@ -105,11 +105,11 @@ func generate(c project.Config, release bool) error {
 		buildTime = time.Now().UTC().Format(time.RFC3339)
 	}
 
-	content, err := format.Source([]byte(fmt.Sprintf("// %s\npackage server\nvar (Version = %q; Commit = %q; BuildTime = %q)\n", generatedMarker, version, commit, buildTime)))
+	content, err := format.Source([]byte(fmt.Sprintf("// %s\npackage desktop\nvar (Version = %q; Commit = %q; BuildTime = %q)\n", generatedMarker, version, commit, buildTime)))
 	if err != nil {
 		return err
 	}
-	if err = writeChanged("server/version_generated.go", content); err != nil {
+	if err = writeChanged("server/desktop/version_generated.go", content); err != nil {
 		return err
 	}
 

@@ -9,10 +9,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
-export function Status(): $CancellablePromise<$models.LocalServerStatus> {
-    return $Call.ByID(3582812127);
+export function Status(): $CancellablePromise<$models.Status> {
+    return $Call.ByID(1375289842);
 }
 
 export function WebSocketURL(): $CancellablePromise<string> {
-    return $Call.ByID(1529608849);
+    return $Call.ByID(2753488352);
 }

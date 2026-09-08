@@ -37,7 +37,7 @@ func testGenerateRenamedProject(t *testing.T, newline string) {
 			t.Fatal(err)
 		}
 	}
-	for _, p := range []string{"server", "build/windows/nsis"} {
+	for _, p := range []string{"server/desktop", "build/windows/nsis"} {
 		if err := os.MkdirAll(filepath.Join(dir, p), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -54,7 +54,7 @@ func testGenerateRenamedProject(t *testing.T, newline string) {
 		t.Fatal(err)
 	}
 	checks := map[string][]string{
-		"server/version_generated.go":          {`"1.2.3-beta.1"`},
+		"server/desktop/version_generated.go":  {`"1.2.3-beta.1"`},
 		"build/windows/nsis/app_generated.nsh": {`INFO_PRODUCTNAME "New Product"`, `INFO_PROJECTNAME "new-product"`, `INFO_PRODUCTVERSION "1.2.3"`, `APP_IDENTIFIER "io.example.new-product"`},
 		"build/darwin/Info.plist":              {"<string>new-product</string>", "<string>New Product</string>", "<string>io.example.new-product</string>"},
 		"build/linux/new-product.desktop":      {"Name=New Product", "Exec=new-product"},

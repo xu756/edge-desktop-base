@@ -1,4 +1,4 @@
-package server
+package localapi
 
 import (
 	"context"
@@ -25,29 +25,30 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-type LocalServerStatus struct {
+type Status struct {
 	Address string `json:"address"`
 	Running bool   `json:"running"`
 }
 
-type LocalServer struct {
+type Server struct {
 	mu       sync.RWMutex
 	address  string
+	version  string
 	running  bool
 	listener net.Listener
 	server   *http.Server
 }
 
-func NewLocalServer(address string) *LocalServer {
-	return &LocalServer{address: address}
+func New(address, version string) *Server {
+	return &Server{address: address, version: version}
 }
 
-func (s *LocalServer) ServiceStartup(context.Context, application.ServiceOptions) error {
+func (s *Server) ServiceStartup(context.Context, application.ServiceOptions) error {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"ok": true, "version": Version})
+		c.JSON(http.StatusOK, gin.H{"ok": true, "version": s.version})
 	})
 	router.GET("/ws", s.handleWebSocket)
 
@@ -78,7 +79,7 @@ func (s *LocalServer) ServiceStartup(context.Context, application.ServiceOptions
 	return nil
 }
 
-func (s *LocalServer) ServiceShutdown() error {
+func (s *Server) ServiceShutdown() error {
 	s.mu.RLock()
 	httpServer := s.server
 	s.mu.RUnlock()
@@ -90,33 +91,38 @@ func (s *LocalServer) ServiceShutdown() error {
 	return httpServer.Shutdown(ctx)
 }
 
-func (s *LocalServer) Status() LocalServerStatus {
+func (s *Server) Status() Status {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return LocalServerStatus{Address: s.address, Running: s.running}
+	address := s.address
+	if s.listener != nil {
+		address = s.listener.Addr().String()
+	}
+	return Status{Address: address, Running: s.running}
 }
 
-func (s *LocalServer) WebSocketURL() string {
-	return "ws://" + s.address + "/ws"
+func (s *Server) WebSocketURL() string {
+	return "ws://" + s.Status().Address + "/ws"
 }
 
-func (s *LocalServer) handleWebSocket(c *gin.Context) {
+func (s *Server) handleWebSocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(maxWebSocketMessageSize)
 
 	if err := conn.WriteJSON(map[string]any{
 		"type":    "runtime.ready",
-		"payload": map[string]any{"version": Version},
+		"payload": map[string]any{"version": s.version},
 	}); err != nil {
 		return
 	}
 	for {
 		var message interface{}
-		err := conn.ReadJSON(message)
+		err := conn.ReadJSON(&message)
 		if err != nil {
 			break
 		}

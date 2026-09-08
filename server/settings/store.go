@@ -1,4 +1,4 @@
-package server
+package settings
 
 import (
 	"encoding/json"
@@ -10,36 +10,36 @@ import (
 )
 
 type Settings struct {
-	AutoCheckUpdates     bool `json:"autoCheckUpdates"`
-	AutoDownloadUpdates  bool `json:"autoDownloadUpdates"`
-	UpdateIntervalHours  int  `json:"updateIntervalHours"`
-	CloseToTray          bool `json:"closeToTray"`
-	AutoStartShowWindow  bool `json:"autoStartShowWindow"`
+	AutoCheckUpdates    bool `json:"autoCheckUpdates"`
+	AutoDownloadUpdates bool `json:"autoDownloadUpdates"`
+	UpdateIntervalHours int  `json:"updateIntervalHours"`
+	CloseToTray         bool `json:"closeToTray"`
+	AutoStartShowWindow bool `json:"autoStartShowWindow"`
 }
 
-type SettingsStore struct {
+type Store struct {
 	mu      sync.RWMutex
 	path    string
 	value   Settings
 	loadErr error
 }
 
-func NewSettingsStore() *SettingsStore {
+func New(configDirName string, legacyConfigDirNames []string) *Store {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return &SettingsStore{value: defaultSettings(), loadErr: err}
+		return &Store{value: defaultSettings(), loadErr: err}
 	}
-	path := filepath.Join(home, ".config", appConfig.ConfigDirName, "settings.json")
+	path := filepath.Join(home, ".config", configDirName, "settings.json")
 	oldDir, _ := os.UserConfigDir()
 	var candidates []string
-	names := append([]string{appConfig.ConfigDirName}, appConfig.LegacyConfigDirNames...)
+	names := append([]string{configDirName}, legacyConfigDirNames...)
 	for _, name := range names {
 		if oldDir != "" {
 			candidates = append(candidates, filepath.Join(oldDir, name, "settings.json"))
 		}
 		candidates = append(candidates, filepath.Join(home, ".config", name, "settings.json"))
 	}
-	return migratedSettingsStore(path, candidates)
+	return migratedStore(path, candidates)
 }
 
 func defaultSettings() Settings {
@@ -52,9 +52,9 @@ func defaultSettings() Settings {
 }
 
 // Copy only on first use of the new path; never remove or overwrite old settings.
-func migratedSettingsStore(path string, candidates []string) *SettingsStore {
+func migratedStore(path string, candidates []string) *Store {
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		return newSettingsStore(path)
+		return newStore(path)
 	}
 	for _, old := range candidates {
 		if filepath.Clean(old) == filepath.Clean(path) {
@@ -71,7 +71,7 @@ func migratedSettingsStore(path string, candidates []string) *SettingsStore {
 			var f *os.File
 			f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 			if errors.Is(err, os.ErrExist) {
-				return newSettingsStore(path)
+				return newStore(path)
 			}
 			if err == nil {
 				_, err = f.Write(data)
@@ -85,15 +85,15 @@ func migratedSettingsStore(path string, candidates []string) *SettingsStore {
 			}
 		}
 		if err != nil {
-			return &SettingsStore{path: path, value: defaultSettings(), loadErr: fmt.Errorf("迁移配置 %s: %w", old, err)}
+			return &Store{path: path, value: defaultSettings(), loadErr: fmt.Errorf("迁移配置 %s: %w", old, err)}
 		}
-		return newSettingsStore(path)
+		return newStore(path)
 	}
-	return newSettingsStore(path)
+	return newStore(path)
 }
 
-func newSettingsStore(path string) *SettingsStore {
-	s := &SettingsStore{path: path, value: defaultSettings()}
+func newStore(path string) *Store {
+	s := &Store{path: path, value: defaultSettings()}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		s.loadErr = s.saveLocked(s.value)
@@ -116,9 +116,9 @@ func newSettingsStore(path string) *SettingsStore {
 	return s
 }
 
-func (s *SettingsStore) Get() Settings { s.mu.RLock(); defer s.mu.RUnlock(); return s.value }
-func (s *SettingsStore) Path() string  { return s.path }
-func (s *SettingsStore) Error() string {
+func (s *Store) Get() Settings { s.mu.RLock(); defer s.mu.RUnlock(); return s.value }
+func (s *Store) Path() string  { return s.path }
+func (s *Store) Error() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.loadErr != nil {
@@ -126,19 +126,19 @@ func (s *SettingsStore) Error() string {
 	}
 	return ""
 }
-func (s *SettingsStore) SetCloseToTray(enabled bool) error {
+func (s *Store) SetCloseToTray(enabled bool) error {
 	return s.change(func(v *Settings) { v.CloseToTray = enabled })
 }
-func (s *SettingsStore) SetAutoStartShowWindow(enabled bool) error {
+func (s *Store) SetAutoStartShowWindow(enabled bool) error {
 	return s.change(func(v *Settings) { v.AutoStartShowWindow = enabled })
 }
-func (s *SettingsStore) SetAutoCheckUpdates(enabled bool) error {
+func (s *Store) SetAutoCheckUpdates(enabled bool) error {
 	return s.change(func(v *Settings) { v.AutoCheckUpdates = enabled })
 }
-func (s *SettingsStore) SetAutoDownloadUpdates(enabled bool) error {
+func (s *Store) SetAutoDownloadUpdates(enabled bool) error {
 	return s.change(func(v *Settings) { v.AutoDownloadUpdates = enabled })
 }
-func (s *SettingsStore) change(edit func(*Settings)) error {
+func (s *Store) change(edit func(*Settings)) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	// Preserve unreadable or malformed files for recovery instead of overwriting them.
@@ -153,7 +153,7 @@ func (s *SettingsStore) change(edit func(*Settings)) error {
 	s.value = next
 	return nil
 }
-func (s *SettingsStore) saveLocked(value Settings) error {
+func (s *Store) saveLocked(value Settings) error {
 	if s.path == "" {
 		return errors.New("用户配置目录不可用")
 	}

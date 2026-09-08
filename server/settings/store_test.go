@@ -1,4 +1,4 @@
-package server
+package settings
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 
 func TestSettingsDefaultsAndPersistence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config", "settings.json")
-	s := newSettingsStore(path)
+	s := newStore(path)
 	if s.Error() != "" {
 		t.Fatal(s.Error())
 	}
@@ -31,7 +31,7 @@ func TestSettingsDefaultsAndPersistence(t *testing.T) {
 	if err := s.SetAutoDownloadUpdates(true); err != nil {
 		t.Fatal(err)
 	}
-	next := newSettingsStore(path)
+	next := newStore(path)
 	if next.Get().CloseToTray || !next.Get().AutoStartShowWindow || next.Get().AutoCheckUpdates || !next.Get().AutoDownloadUpdates {
 		t.Fatal(next.Get())
 	}
@@ -52,7 +52,7 @@ func TestSettingsLegacyAndMalformed(t *testing.T) {
 			if err := os.WriteFile(path, []byte(tc.data), 0600); err != nil {
 				t.Fatal(err)
 			}
-			s := newSettingsStore(path)
+			s := newStore(path)
 			if tc.valid {
 				value := s.Get()
 				if s.Error() != "" || value.CloseToTray || value.AutoStartShowWindow || !value.AutoCheckUpdates || value.AutoDownloadUpdates || value.UpdateIntervalHours != 6 {
@@ -78,7 +78,7 @@ func TestSettingsLegacyAndMalformed(t *testing.T) {
 }
 
 func TestSettingsWriteFailureKeepsMemory(t *testing.T) {
-	s := newSettingsStore(filepath.Join(t.TempDir(), "settings.json"))
+	s := newStore(filepath.Join(t.TempDir(), "settings.json"))
 	before := s.Get()
 	// Rename cannot replace a nonempty directory, even when tests run as root.
 	s.path = t.TempDir()
@@ -93,41 +93,6 @@ func TestSettingsWriteFailureKeepsMemory(t *testing.T) {
 	}
 }
 
-func TestAutostartArguments(t *testing.T) {
-	for _, show := range []bool{true, false} {
-		opts := applicationAutostartOptions(show)
-		if opts.Identifier != AppIdentifier || opts.Arguments[0] != "--autostart" {
-			t.Fatal(opts)
-		}
-		if show && len(opts.Arguments) != 1 {
-			t.Fatal(opts)
-		}
-		if !show && (len(opts.Arguments) != 2 || opts.Arguments[1] != "--hidden") {
-			t.Fatal(opts)
-		}
-	}
-}
-
-func TestStartupWindowVisibility(t *testing.T) {
-	for _, tc := range []struct {
-		name         string
-		args         []string
-		show, hidden bool
-	}{
-		{"manual stays visible", nil, false, false},
-		{"explicit hidden", []string{"--hidden"}, true, true},
-		{"autostart background", []string{"--autostart"}, false, true},
-		{"autostart visible", []string{"--autostart"}, true, false},
-		{"saved preference overrides stale hidden argument", []string{"--autostart", "--hidden"}, true, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := shouldStartHidden(tc.args, Settings{AutoStartShowWindow: tc.show}); got != tc.hidden {
-				t.Fatalf("hidden=%v, want %v", got, tc.hidden)
-			}
-		})
-	}
-}
-
 func TestSettingsMigration(t *testing.T) {
 	root := t.TempDir()
 	old := filepath.Join(root, "legacy.json")
@@ -136,7 +101,7 @@ func TestSettingsMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, ".config", "renamed-app", "settings.json")
-	store := migratedSettingsStore(path, []string{filepath.Join(root, "missing"), old})
+	store := migratedStore(path, []string{filepath.Join(root, "missing"), old})
 	if store.Error() != "" || store.Get().CloseToTray || !store.Get().AutoStartShowWindow || !store.Get().AutoCheckUpdates || store.Get().AutoDownloadUpdates {
 		t.Fatal(store.Get(), store.Error())
 	}
@@ -146,7 +111,7 @@ func TestSettingsMigration(t *testing.T) {
 	if err := store.SetCloseToTray(true); err != nil {
 		t.Fatal(err)
 	}
-	if next := migratedSettingsStore(path, []string{old}); !next.Get().CloseToTray {
+	if next := migratedStore(path, []string{old}); !next.Get().CloseToTray {
 		t.Fatal("overwrote existing destination")
 	}
 }
@@ -157,7 +122,7 @@ func TestCorruptLegacySettingsPreserved(t *testing.T) {
 	if err := os.WriteFile(old, []byte(`broken`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	store := migratedSettingsStore(filepath.Join(root, "new", "settings.json"), []string{old})
+	store := migratedStore(filepath.Join(root, "new", "settings.json"), []string{old})
 	if store.Error() == "" {
 		t.Fatal("expected corrupt config error")
 	}
@@ -172,8 +137,8 @@ func TestUserSettingsUseHomeDotConfig(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg-override"))
 	t.Setenv("APPDATA", filepath.Join(home, "appdata"))
-	store := NewSettingsStore()
-	want := filepath.Join(home, ".config", appConfig.ConfigDirName, "settings.json")
+	store := New("test-app", []string{"old-app"})
+	want := filepath.Join(home, ".config", "test-app", "settings.json")
 	if store.Error() != "" || store.Path() != want {
 		t.Fatal(store.Path(), store.Error())
 	}

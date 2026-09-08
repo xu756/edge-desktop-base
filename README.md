@@ -11,12 +11,33 @@
 - 系统托盘：打开主窗口、检查更新、退出
 - 可配置关闭窗口时隐藏到托盘
 - Gin 本地服务与 WebSocket `/ws` 示例，仅监听 `127.0.0.1:19876`
-- WebSocket 仅允许 Wails/loopback 页面 Origin，并限制单条消息大小为 1 MiB
+- WebSocket 限制单条消息大小为 1 MiB；当前 Origin 沿用全部放行配置（见 `server/localapi/server.go`）
 - WebView 内容区域默认禁止 HTML 拖拽和文本拖选；原生系统标题栏仍可正常移动窗口
 - GitHub Actions 负责 Windows/Linux/macOS 构建，源码仓库可以保持私有
 - 最终分发只走公开 CNB 仓库，不创建 GitHub Release
 - 自定义 CNB updater provider，运行时不依赖 GitHub API / GitHub Releases
 - 更新二进制使用 SHA-256 校验
+
+## 后端目录
+
+```text
+server/
+├── server.go                 # 对 main 保留 server.New() 启动入口
+├── desktop/
+│   ├── app.go                # Wails 初始化、生命周期和各能力装配
+│   ├── service.go            # 前端调用的 DesktopService
+│   ├── windows.go            # 主窗口、托盘、自启动参数
+│   ├── updater.go            # 更新窗口与检查/下载/重启流程协调
+│   ├── updater-window.html   # 更新界面模板
+│   └── version_generated.go  # buildmeta 生成版本信息
+├── settings/                 # 用户配置持久化、默认值和旧配置迁移
+├── localapi/                 # 本地 HTTP / WebSocket 服务
+└── update/                   # CNB Provider、校验元信息及平台更新实现
+```
+
+`desktop` 负责装配其余子包；`settings` 和 `localapi` 通过构造参数接收目录名或版本号，不反向依赖桌面层。CNB 分发协议与平台替换逻辑继续集中在 `update`。空的 `handler` 占位目录已移除，未来业务处理器可按所属功能包添加。
+
+修改 Go 服务包名后必须重新生成 Wails bindings；前端统一从 `frontend/src/lib/desktop.ts` 导入桌面服务。版本生成器已对应 `server/desktop/version_generated.go`，正常构建会自动同步。
 
 ## 开发
 
@@ -26,7 +47,7 @@ cd frontend && bun install && cd ..
 wails3 task dev
 ```
 
-Wails 会在开发/构建时自动生成 `frontend/bindings`，前端的服务调用来自 `server.DesktopService`。
+Wails 会在开发/构建时自动生成 `frontend/bindings`，前端的服务调用来自 `desktop.DesktopService`。
 
 ## WebSocket
 
@@ -406,7 +427,7 @@ edgeinfer-node-test/prerelease.json
 
 **macOS 限制：** 当前 Wails beta.17 在 macOS 13+ 的打包 `.app` 中使用 SMAppService，忽略自定义参数；该模式下窗口开关会禁用并提示，由系统决定启动窗口行为。
 
-更新窗口模板位于 `server/updater-window.html`，基于 Wails beta.17 的 MIT 模板做中文化和样式定制。升级 Wails 时需核对 updater Provider 接口、事件协议和 runtime-ready 握手。
+更新窗口模板位于 `server/desktop/updater-window.html`，基于 Wails beta.17 的 MIT 模板做中文化和样式定制。升级 Wails 时需核对 updater Provider 接口、事件协议和 runtime-ready 握手。
 
 ## Windows 安装包
 
