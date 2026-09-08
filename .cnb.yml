@@ -13,9 +13,9 @@
       stages:
         - name: Validate release tag
           script: |
-            set -euo pipefail
+            set -eu
             tag="${CNB_BRANCH}"
-            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
               echo "Invalid release tag: $tag"
               echo "Expected: v1.2.3 or v1.2.3-beta.1"
               exit 1
@@ -23,7 +23,7 @@
 
         - name: Install build toolchain
           script: |
-            set -euo pipefail
+            set -eu
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               ca-certificates \
@@ -35,7 +35,9 @@
               libwebkitgtk-6.0-dev
             rm -rf /var/lib/apt/lists/*
 
-            curl -fsSL https://bun.sh/install | bash
+            curl -fsSL https://bun.sh/install -o /tmp/install-bun.sh
+            bash /tmp/install-bun.sh
+            rm -f /tmp/install-bun.sh
             ln -sf /root/.bun/bin/bun /usr/local/bin/bun
 
             go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.17
@@ -47,7 +49,7 @@
 
         - name: Build Linux release assets
           script: |
-            set -euo pipefail
+            set -eu
 
             export VERSION="${CNB_BRANCH#v}"
             export COMMIT="${CNB_COMMIT}"
@@ -67,13 +69,13 @@
             cp "bin/${APP_NAME}" "release/${ASSET_PREFIX}-linux-amd64"
             chmod +x "release/${ASSET_PREFIX}-linux-amd64"
 
-            shopt -s nullglob
-            packages=(bin/*.deb)
-            if [ "${#packages[@]}" -ne 1 ]; then
-              echo "Expected exactly one DEB package, found ${#packages[@]}"
+            package_count="$(find bin -maxdepth 1 -type f -name '*.deb' | wc -l | tr -d ' ')"
+            if [ "$package_count" -ne 1 ]; then
+              echo "Expected exactly one DEB package, found ${package_count}"
               exit 1
             fi
-            cp "${packages[0]}" "release/${ASSET_PREFIX}-linux-amd64.deb"
+            package="$(find bin -maxdepth 1 -type f -name '*.deb' -print -quit)"
+            cp "$package" "release/${ASSET_PREFIX}-linux-amd64.deb"
 
             (
               cd release
