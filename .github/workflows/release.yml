@@ -14,7 +14,6 @@ concurrency:
 
 env:
   WAILS_VERSION: v3.0.0-beta.17
-  APP_NAME: edgeinfer-node-test
 
 jobs:
   metadata:
@@ -45,7 +44,7 @@ jobs:
           - runner: windows-2025
             platform: windows
             arch: amd64
-            task: windows:build
+            task: windows:package
           - runner: ubuntu-24.04
             platform: linux
             arch: amd64
@@ -63,7 +62,6 @@ jobs:
     env:
       VERSION: ${{ needs.metadata.outputs.version }}
       COMMIT: ${{ github.sha }}
-      ASSET_PREFIX: edgeinfer-node-test-${{ github.ref_name }}
 
     steps:
       - name: Checkout release tag
@@ -90,27 +88,40 @@ jobs:
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@${{ env.WAILS_VERSION }}
 
       - name: Generate version metadata from tag
-        run: go run ./cmd/buildmeta
+        run: go run ./cmd/buildmeta -release
 
-      - name: Refresh Wails build assets
-        run: wails3 task common:update:build-assets
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+            choco install nsis --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build application
-        run: wails3 task ${{ matrix.task }} ARCH=${{ matrix.arch }}
+        run: wails3 task ${{ matrix.task }} ARCH=${{ matrix.arch }} INSTALL_SCOPE=user
 
       - name: Prepare Windows updater asset
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "bin/edgeinfer-node-test.exe" "release/$env:ASSET_PREFIX-windows-${{ matrix.arch }}.exe"
+          Copy-Item "bin/$env:APP_NAME.exe" "release/$env:ASSET_PREFIX-windows-${{ matrix.arch }}.exe"
+
+      - name: Prepare Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "bin/$env:APP_NAME-${{ matrix.arch }}-installer.exe" "release/$env:ASSET_PREFIX-windows-${{ matrix.arch }}-installer.exe"
 
       - name: Prepare Linux updater asset
         if: runner.os == 'Linux'
         shell: bash
         run: |
           mkdir -p release
-          cp bin/edgeinfer-node-test "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
+          cp "bin/${APP_NAME}" "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
           chmod +x "release/${ASSET_PREFIX}-linux-${{ matrix.arch }}"
 
       - name: Prepare macOS updater asset
@@ -119,7 +130,7 @@ jobs:
         run: |
           mkdir -p release
           ditto -c -k --sequesterRsrc --keepParent \
-            bin/edgeinfer-node-test.app \
+            "bin/${APP_NAME}.app" \
             "release/${ASSET_PREFIX}-darwin-${{ matrix.arch }}.zip"
 
       - name: Upload build artifact
@@ -146,7 +157,8 @@ jobs:
         shell: bash
         run: |
           cd release
-          sha256sum edgeinfer-node-test-* > SHA256SUMS
+          sha256sum -- * > ../SHA256SUMS
+          mv ../SHA256SUMS SHA256SUMS
           cat SHA256SUMS
 
       - name: Publish GitHub Release

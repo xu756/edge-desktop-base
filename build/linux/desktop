@@ -1,13 +1,9 @@
 [Desktop Entry]
-Version=1.0
-Name=My Product
-Comment=A edgeinfer-node-test application
-# The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/edgeinfer-node-test %u
-Terminal=false
 Type=Application
+Name=edgeinfer-node-test
+Comment=Reusable Wails v3 desktop application foundation
+Exec=edgeinfer-node-test
 Icon=edgeinfer-node-test
 Categories=Utility;
-StartupWMClass=edgeinfer-node-test
-
- 
+Terminal=false
+StartupNotify=false

@@ -1,10 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=edgeinfer-node-test
+Comment=Reusable Wails v3 desktop application foundation
 Exec=edgeinfer-node-test
 Icon=edgeinfer-node-test
-Categories=Development;
+Categories=Utility;
 Terminal=false
-Keywords=wails
-Version=1.0
 StartupNotify=false

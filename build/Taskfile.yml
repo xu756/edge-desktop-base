@@ -1,7 +1,16 @@
 version: '3'
 
 tasks:
+  project:configure:
+    summary: Synchronise project identity and build metadata
+    run: once
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - go run ./cmd/buildmeta
+
   go:mod:tidy:
+    deps:
+      - task: project:configure
     summary: Runs `go mod tidy`
     internal: true
     # Universal/multi-arch builds invoke this concurrently from parallel deps;
@@ -191,6 +200,8 @@ tasks:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
 
   generate:icons:
+    deps:
+      - task: project:configure
     summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
     run: once
     dir: build
@@ -231,10 +242,9 @@ tasks:
       - bun run dev --port {{.VITE_PORT}} --strictPort
 
   update:build-assets:
-    summary: Updates the build assets
-    dir: build
+    summary: Synchronise metadata while preserving custom packaging scripts
     cmds:
-      - wails3 update build-assets -name "{{.APP_NAME}}" -binaryname "{{.APP_NAME}}" -config config.yml -dir .
+      - task: project:configure
 
   build:server:
     summary: Builds the application in server mode (no GUI, HTTP server only)

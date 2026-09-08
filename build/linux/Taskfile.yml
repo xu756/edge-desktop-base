@@ -166,17 +166,9 @@ tasks:
       - wails3 tool package -name "{{.APP_NAME}}" -format archlinux -config ./build/linux/nfpm/nfpm.yaml -out {{.ROOT_DIR}}/bin
 
   generate:dotdesktop:
-    summary: Generates a `.desktop` file
-    dir: build
+    summary: Generate application menu metadata from project/app.json
     cmds:
-      - mkdir -p {{.ROOT_DIR}}/build/linux/appimage
-      - wails3 generate .desktop -name "{{.APP_NAME}}" -exec "{{.EXEC}}" -icon "{{.ICON}}" -outputfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -categories "{{.CATEGORIES}}"
-    vars:
-      APP_NAME: '{{.APP_NAME}}'
-      EXEC: '{{.APP_NAME}}'
-      ICON: '{{.APP_NAME}}'
-      CATEGORIES: 'Development;'
-      OUTPUTFILE: '{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop'
+      - task: common:project:configure
 
   run:
     cmds:

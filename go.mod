@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/wailsapp/wails/v3 v3.0.0-beta.17
+	golang.org/x/mod v0.37.0
 )
 
 require (
@@ -40,7 +41,6 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
-	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.39.0 // indirect

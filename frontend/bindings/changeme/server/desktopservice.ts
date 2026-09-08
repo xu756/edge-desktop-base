@@ -21,6 +21,13 @@ export function SetAutoStart(enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(351485835, enabled);
 }
 
+/**
+ * SetAutoStartShowWindow updates both the saved preference and an existing registration.
+ */
+export function SetAutoStartShowWindow(show: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1039525058, show);
+}
+
 export function SetCloseToTray(enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(321281083, enabled);
 }

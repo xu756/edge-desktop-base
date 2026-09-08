@@ -9,6 +9,10 @@ export interface DesktopState {
     "platform": string;
     "architecture": string;
     "autoStart": boolean;
+    "autoStartShowWindow": boolean;
+    "autoStartWindowSupported": boolean;
+    "configPath": string;
+    "configError"?: string;
     "autoStartError"?: string;
     "closeToTray": boolean;
     "trayReady": boolean;

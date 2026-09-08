@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) NewMainWindow() {
-	startHidden := hasArgument("--hidden")
+	startHidden := shouldStartHidden(os.Args[1:], s.Settings.Get())
 	window := s.App.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:      "main",
 		Title:     AppName,
@@ -52,11 +52,18 @@ func (s *Server) ShowMainWindow() {
 	s.MainWindow.Focus()
 }
 
-func hasArgument(target string) bool {
-	for _, arg := range os.Args[1:] {
-		if strings.EqualFold(strings.TrimSpace(arg), target) {
-			return true
+func shouldStartHidden(args []string, settings Settings) bool {
+	hidden, autostart := false, false
+	for _, arg := range args {
+		switch strings.ToLower(strings.TrimSpace(arg)) {
+		case "--hidden":
+			hidden = true
+		case "--autostart":
+			autostart = true
 		}
 	}
-	return false
+	if autostart {
+		return !settings.AutoStartShowWindow
+	}
+	return hidden
 }

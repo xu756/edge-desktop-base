@@ -1,7 +1,8 @@
 version: '3'
 
 vars:
-  APP_NAME: "edgeinfer-node-test"
+  APP_NAME:
+    sh: bun -p "require('./project/app.json').binaryName"
   BIN_DIR: "bin"
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "bun"}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
@@ -19,6 +20,11 @@ includes:
   android: ./build/android/Taskfile.yml
 
 tasks:
+  configure:
+    summary: Synchronise application identity from project/app.json
+    cmds:
+      - task: common:project:configure
+
   build:
     summary: Builds the application
     cmds:
@@ -35,6 +41,8 @@ tasks:
       - task: "{{.GOOS}}:run"
 
   dev:
+    deps:
+      - task: common:project:configure
     summary: Runs the application in development mode
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}

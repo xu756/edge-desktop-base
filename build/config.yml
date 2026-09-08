@@ -1,14 +1,14 @@
 # Wails v3 build configuration.
-# Run `wails3 task common:update:build-assets` after changing application metadata.
+# Identity is synchronised from project/app.json by `wails3 task configure`.
 version: '3'
 
 info:
   companyName: "xu756"
-  productName: "Edge Desktop Base"
+  productName: "edgeinfer-node-test"
   productIdentifier: "io.github.xu756.edge-desktop-base"
   description: "Reusable Wails v3 desktop application foundation"
   copyright: "(c) 2026, xu756"
-  comments: "Wails v3 + Bun + shadcn desktop base"
+  comments: "Reusable Wails v3 desktop application foundation"
   version: "0.1.0"
 
 dev_mode:

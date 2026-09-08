@@ -1,15 +1,15 @@
 {
-	"fixed": {
-		"file_version": "0.1.0"
-	},
-	"info": {
-		"0000": {
-			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A edgeinfer-node-test application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
-		}
-	}
+  "fixed": {
+    "file_version": "0.1.0"
+  },
+  "info": {
+    "0000": {
+      "Comments": "Reusable Wails v3 desktop application foundation",
+      "CompanyName": "xu756",
+      "FileDescription": "Reusable Wails v3 desktop application foundation",
+      "LegalCopyright": "(c) 2026, xu756",
+      "ProductName": "edgeinfer-node-test",
+      "ProductVersion": "0.1.0"
+    }
+  }
 }

@@ -33,6 +33,10 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+!ifndef WAILS_INSTALL_SCOPE
+    !define WAILS_INSTALL_SCOPE "user"
+!endif
+!include "app_generated.nsh"
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -74,7 +78,7 @@ ManifestDPIAware true
 Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the installer's file.
 !if "${WAILS_INSTALL_SCOPE}" == "user"
-    InstallDir "$LOCALAPPDATA\Programs\${INFO_PRODUCTNAME}"
+    InstallDir "$LOCALAPPDATA\Programs\${INFO_PROJECTNAME}"
 !else
     InstallDir "$PROGRAMFILES64\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 !endif
@@ -115,5 +119,6 @@ Section "uninstall"
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
 
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_IDENTIFIER}"
     !insertmacro wails.deleteUninstaller
 SectionEnd

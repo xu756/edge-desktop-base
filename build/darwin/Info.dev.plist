@@ -4,15 +4,15 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>My Product</string>
+            <string>edgeinfer-node-test</string>
         <key>CFBundleExecutable</key>
             <string>edgeinfer-node-test</string>
         <key>CFBundleIdentifier</key>
-            <string>com.example.edgeinfernodetest</string>
+            <string>io.github.xu756.edge-desktop-base</string>
         <key>CFBundleVersion</key>
             <string>0.1.0</string>
         <key>CFBundleGetInfoString</key>
-            <string>This is a comment</string>
+            <string>Reusable Wails v3 desktop application foundation</string>
         <key>CFBundleShortVersionString</key>
             <string>0.1.0</string>
         <key>CFBundleIconFile</key>
@@ -24,7 +24,7 @@
         <key>NSHighResolutionCapable</key>
             <string>true</string>
         <key>NSHumanReadableCopyright</key>
-            <string>© 2026, My Company</string>
+            <string>(c) 2026, xu756</string>
         <key>NSAppTransportSecurity</key>
         <dict>
             <key>NSAllowsLocalNetworking</key>
