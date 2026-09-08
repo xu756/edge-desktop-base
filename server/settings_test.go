@@ -12,8 +12,9 @@ func TestSettingsDefaultsAndPersistence(t *testing.T) {
 	if s.Error() != "" {
 		t.Fatal(s.Error())
 	}
-	if !s.Get().CloseToTray || !s.Get().AutoCheckUpdates || s.Get().UpdateIntervalHours != 6 {
-		t.Fatal(s.Get())
+	defaults := s.Get()
+	if !defaults.CloseToTray || !defaults.AutoCheckUpdates || defaults.AutoDownloadUpdates || defaults.UpdateIntervalHours != 6 {
+		t.Fatal(defaults)
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
@@ -24,8 +25,14 @@ func TestSettingsDefaultsAndPersistence(t *testing.T) {
 	if err := s.SetCloseToTray(false); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.SetAutoCheckUpdates(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAutoDownloadUpdates(true); err != nil {
+		t.Fatal(err)
+	}
 	next := newSettingsStore(path)
-	if next.Get().CloseToTray || !next.Get().AutoStartShowWindow {
+	if next.Get().CloseToTray || !next.Get().AutoStartShowWindow || next.Get().AutoCheckUpdates || !next.Get().AutoDownloadUpdates {
 		t.Fatal(next.Get())
 	}
 }
@@ -47,8 +54,9 @@ func TestSettingsLegacyAndMalformed(t *testing.T) {
 			}
 			s := newSettingsStore(path)
 			if tc.valid {
-				if s.Error() != "" || s.Get().CloseToTray || s.Get().AutoStartShowWindow || s.Get().UpdateIntervalHours != 6 {
-					t.Fatal(s.Get(), s.Error())
+				value := s.Get()
+				if s.Error() != "" || value.CloseToTray || value.AutoStartShowWindow || !value.AutoCheckUpdates || value.AutoDownloadUpdates || value.UpdateIntervalHours != 6 {
+					t.Fatal(value, s.Error())
 				}
 			} else {
 				if s.Error() == "" {
@@ -129,7 +137,7 @@ func TestSettingsMigration(t *testing.T) {
 	}
 	path := filepath.Join(root, ".config", "renamed-app", "settings.json")
 	store := migratedSettingsStore(path, []string{filepath.Join(root, "missing"), old})
-	if store.Error() != "" || store.Get().CloseToTray || !store.Get().AutoStartShowWindow {
+	if store.Error() != "" || store.Get().CloseToTray || !store.Get().AutoStartShowWindow || !store.Get().AutoCheckUpdates || store.Get().AutoDownloadUpdates {
 		t.Fatal(store.Get(), store.Error())
 	}
 	if oldData, err := os.ReadFile(old); err != nil || string(oldData) != string(data) {
