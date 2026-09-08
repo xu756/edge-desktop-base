@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-"""Publish GitHub Actions artifacts to the shared public CNB distribution repo.
+"""Publish GitHub Actions artifacts to the configured public CNB distribution repo.
 
-The private source tree is never pushed to CNB. Binary files are stored as CNB
-Release attachments under a namespaced tag (<binaryName>-v<version>), while the
-public Git tree only receives small JSON manifests:
-
-  <binaryName>/latest.json
-  <binaryName>/v<version>/manifest.json
-
-Prereleases update <binaryName>/prerelease.json instead of latest.json.
+Only CNB_TOKEN is read from CI secrets. The repository URL and branch come from
+project/app.json, and CNB Git HTTPS authentication always uses username `cnb`.
+The private source repository is never pushed to CNB.
 """
 
 from __future__ import annotations
@@ -28,14 +23,12 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-API_ENDPOINT = os.getenv("CNB_API_ENDPOINT", "https://api.cnb.cool").rstrip("/")
+API_ENDPOINT = "https://api.cnb.cool"
+CNB_USERNAME = "cnb"
 TOKEN = os.getenv("CNB_TOKEN", "").strip()
-USERNAME = os.getenv("CNB_USERNAME", "").strip() or "cnb"
-CONFIG_PATH = Path(os.getenv("PROJECT_CONFIG", "project/app.json"))
+CONFIG_PATH = Path("project/app.json")
 SOURCE_TAG = os.getenv("GITHUB_REF_NAME", "").strip()
-RELEASE_DIR = Path(os.getenv("CNB_RELEASE_DIR", "release"))
-REPO_URL_OVERRIDE = os.getenv("CNB_REPO_URL", "").strip()
-BRANCH_OVERRIDE = os.getenv("CNB_TARGET_BRANCH", "").strip()
+RELEASE_DIR = Path("release")
 
 SEMVER_RE = re.compile(
     r"^(0|[1-9][0-9]*)\."
@@ -70,8 +63,8 @@ def normalize_repo_url(value: str) -> str:
 
 def repo_slug_from_url(value: str) -> str:
     parsed = urllib.parse.urlparse(value)
-    if parsed.scheme != "https" or not parsed.netloc:
-        fail(f"invalid CNB repository URL: {value}")
+    if parsed.scheme != "https" or parsed.netloc.lower() != "cnb.cool":
+        fail(f"updateRepositoryURL must be an https://cnb.cool/... URL: {value}")
     slug = parsed.path.strip("/")
     if not slug or "/" not in slug:
         fail(f"CNB repository URL must include group/repository: {value}")
@@ -105,9 +98,7 @@ def api_request(
             if not body:
                 return None
             decoded = json.loads(body)
-            if isinstance(decoded, dict):
-                return decoded
-            return {"data": decoded}
+            return decoded if isinstance(decoded, dict) else {"data": decoded}
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace").strip()
         if allow_not_found and exc.code == 404:
@@ -143,8 +134,8 @@ def get_or_create_release(repo_slug: str, branch: str, release_tag: str, app: st
             "body": f"Distribution artifacts for {app} v{version}.",
             "draft": False,
             "prerelease": prerelease,
-            # This repository is shared by multiple applications, so a single
-            # repository-wide latest marker is intentionally not used.
+            # The repository is shared by multiple applications, so each app
+            # owns its own latest.json instead of using repository-wide latest.
             "make_latest": "false",
         },
     )
@@ -189,10 +180,8 @@ def upload_asset(repo_slug: str, release_id: str, asset: Path) -> None:
         ],
         check=True,
     )
-
     separator = "&" if "?" in verify_url else "?"
     api_request("POST", f"{verify_url}{separator}ttl=0")
-    print(f"Uploaded {asset.name}")
 
 
 def sha256_file(path: Path) -> str:
@@ -209,6 +198,7 @@ def classify_asset(app: str, path: Path) -> dict[str, object] | None:
     match = re.fullmatch(re.escape(app) + r"-(windows|linux|darwin)-([a-z0-9_]+)(.*)", path.name)
     if not match:
         fail(f"unexpected release asset name: {path.name}")
+
     platform, arch, suffix = match.groups()
     runtime_suffix = {"windows": ".exe", "linux": "", "darwin": ".zip"}[platform]
     installer_suffix = {"windows": "-installer.exe", "linux": ".deb", "darwin": ".pkg"}[platform]
@@ -218,6 +208,7 @@ def classify_asset(app: str, path: Path) -> dict[str, object] | None:
         kind = "installer"
     else:
         fail(f"unsupported release asset for {platform}/{arch}: {path.name}")
+
     return {
         "kind": kind,
         "platform": platform,
@@ -291,16 +282,13 @@ def should_update_pointer(path: Path, version: str) -> bool:
         current_version = str(current.get("version", ""))
     except (OSError, json.JSONDecodeError, AttributeError):
         return True
-    if not current_version:
-        return True
-    return compare_semver(version, current_version) >= 0
+    return not current_version or compare_semver(version, current_version) >= 0
 
 
 def git_env(askpass: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["GIT_ASKPASS"] = str(askpass)
     env["GIT_TERMINAL_PROMPT"] = "0"
-    env["CNB_USERNAME"] = USERNAME
     env["CNB_TOKEN"] = TOKEN
     return env
 
@@ -330,7 +318,7 @@ def publish_manifest_repo(repo_url: str, branch: str, app: str, source_tag: str,
             askpass.write_text(
                 "#!/bin/sh\n"
                 "case \"$1\" in\n"
-                "  *Username*) printf '%s\\n' \"$CNB_USERNAME\" ;;\n"
+                f"  *Username*) printf '%s\\n' '{CNB_USERNAME}' ;;\n"
                 "  *) printf '%s\\n' \"$CNB_TOKEN\" ;;\n"
                 "esac\n",
                 encoding="utf-8",
@@ -389,17 +377,10 @@ def main() -> int:
 
     project = load_project()
     app = str(project.get("binaryName", "")).strip()
-    configured_repo_url = normalize_repo_url(str(project.get("updateRepositoryURL", "")))
-    configured_branch = str(project.get("updateBranch", "")).strip() or "main"
-    if not app or not configured_repo_url:
+    repo_url = normalize_repo_url(str(project.get("updateRepositoryURL", "")))
+    branch = str(project.get("updateBranch", "")).strip() or "main"
+    if not app or not repo_url:
         fail("project/app.json must define binaryName and updateRepositoryURL")
-
-    repo_url = normalize_repo_url(REPO_URL_OVERRIDE) or configured_repo_url
-    branch = BRANCH_OVERRIDE or configured_branch
-    if REPO_URL_OVERRIDE and repo_url != configured_repo_url:
-        fail(f"CNB_REPO_URL ({repo_url}) must match project/app.json updateRepositoryURL ({configured_repo_url})")
-    if BRANCH_OVERRIDE and branch != configured_branch:
-        fail(f"CNB_TARGET_BRANCH ({branch}) must match project/app.json updateBranch ({configured_branch})")
 
     repo_slug = repo_slug_from_url(repo_url)
     version = SOURCE_TAG[1:]
@@ -415,8 +396,7 @@ def main() -> int:
     for asset in assets:
         upload_asset(repo_slug, release_id, asset)
 
-    # Publish metadata only after every binary attachment has been uploaded, so
-    # clients never observe a latest.json that points at an incomplete release.
+    # Publish metadata only after every binary attachment is available.
     publish_manifest_repo(repo_url, branch, app, SOURCE_TAG, manifest)
     print(f"Published {len(assets)} assets to CNB Release {release_tag}")
     return 0
