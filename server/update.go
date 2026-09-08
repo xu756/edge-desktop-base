@@ -80,28 +80,42 @@ func (s *Server) automaticUpdateLoop(interval time.Duration) {
 	if interval <= 0 {
 		return
 	}
+	startup := time.NewTimer(30 * time.Second)
 	ticker := time.NewTicker(interval)
+	defer startup.Stop()
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-startup.C:
+			s.runAutomaticUpdateCheck()
+		case <-ticker.C:
+			s.runAutomaticUpdateCheck()
+		}
 		if s.quitting.Load() {
 			return
 		}
-		cfg := s.Settings.Get()
-		if !cfg.AutoCheckUpdates || s.App.Updater.State() == updater.StateReady {
-			continue
-		}
-		if !s.updating.CompareAndSwap(false, true) {
-			continue
-		}
+	}
+}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		err := s.performBackgroundUpdateCheck(ctx, cfg.AutoDownloadUpdates)
-		cancel()
-		s.updating.Store(false)
-		if err != nil && s.App != nil {
-			s.App.Logger.Error("automatic update", "error", err)
-		}
+func (s *Server) runAutomaticUpdateCheck() {
+	if s.quitting.Load() {
+		return
+	}
+	cfg := s.Settings.Get()
+	if !cfg.AutoCheckUpdates || s.App.Updater.State() == updater.StateReady {
+		return
+	}
+	if !s.updating.CompareAndSwap(false, true) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	err := s.performBackgroundUpdateCheck(ctx, cfg.AutoDownloadUpdates)
+	cancel()
+	s.updating.Store(false)
+	if err != nil && s.App != nil {
+		s.App.Logger.Error("automatic update", "error", err)
 	}
 }
 
@@ -114,6 +128,8 @@ func (s *Server) performBackgroundUpdateCheck(ctx context.Context, autoDownload 
 	if release == nil || !autoDownload {
 		return nil
 	}
+	// Automatic download deliberately stops at StateReady. Applying the update
+	// always requires an explicit user restart action.
 	return s.App.Updater.DownloadAndInstall(ctx)
 }
 
@@ -204,7 +220,13 @@ func (s *Server) handleUpdateRestart() {
 	if s.updateManager.NeedsPrivilegedRuntimeUpdate() {
 		err = s.updateManager.ApplyStagedRuntimeUpdate(ctx, s.App.Updater.DownloadedPath(), s.Quit)
 	} else {
+		// Wails Restart calls App.Quit internally. Mark the shutdown as intentional
+		// first so the main-window close-to-tray hook does not cancel it.
+		s.quitting.Store(true)
 		err = s.App.Updater.Restart(ctx)
+		if err != nil {
+			s.quitting.Store(false)
+		}
 	}
 	if err != nil {
 		s.App.Logger.Error("restart after update", "error", err)
