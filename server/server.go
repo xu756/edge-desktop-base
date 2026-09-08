@@ -16,10 +16,10 @@ type Server struct {
 	Settings       *SettingsStore
 	LocalServer    *LocalServer
 	DesktopService *DesktopService
-	UpdateManager  *desktopupdate.Manager
 
-	quitting atomic.Bool
-	updating atomic.Bool
+	updateManager *desktopupdate.Manager
+	quitting      atomic.Bool
+	updating      atomic.Bool
 }
 
 func New() *Server {
