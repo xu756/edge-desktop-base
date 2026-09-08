@@ -1,7 +1,6 @@
 package server
 
 import (
-	"changeme/project"
 	"context"
 	_ "embed"
 	"errors"
@@ -73,25 +72,22 @@ func (s *Server) CheckForUpdates() error {
 	return nil
 }
 
-// Select only the published runtime artifact. Installers must never replace the app binary.
+// Select only the stable runtime filename for the current platform and architecture.
+// The release tag carries the version; installers and sidecars must never replace the app binary.
 func matchUpdateAsset(req updater.CheckRequest, assets []githubupdater.ReleaseAsset) int {
-	suffix := "-" + req.Platform + "-" + req.Arch
+	expected := appConfig.BinaryName + "-" + req.Platform + "-" + req.Arch
 	switch req.Platform {
 	case "windows":
-		suffix += ".exe"
+		expected += ".exe"
 	case "darwin":
-		suffix += ".zip"
+		expected += ".zip"
 	case "linux":
 	default:
 		return -1
 	}
-	prefix := appConfig.BinaryName + "-v"
+
 	for i, asset := range assets {
-		if !strings.HasPrefix(asset.Name, prefix) || !strings.HasSuffix(asset.Name, suffix) {
-			continue
-		}
-		version := strings.TrimSuffix(strings.TrimPrefix(asset.Name, prefix), suffix)
-		if _, err := project.NumericVersion(version); err == nil {
+		if asset.Name == expected {
 			return i
 		}
 	}
