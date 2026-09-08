@@ -55,21 +55,37 @@ func (s *Server) CheckForUpdates() error {
 	if s.App == nil {
 		return errors.New("application is not ready")
 	}
+
 	if updateInstallHint() != "" {
+		if !s.updating.CompareAndSwap(false, true) {
+			return errors.New("更新流程正在进行")
+		}
+		defer s.updating.Store(false)
+
 		provider, err := configuredCNBProvider()
 		if err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		manifest, err := provider.fetchLatestManifest(ctx)
-		if err == nil && manifest != nil && provider.validateManifest(manifest) == nil {
-			return s.App.Browser.OpenURL(provider.releasePageURL(manifest.Tag))
+
+		update, err := provider.checkInstallerUpdate(ctx, Version, runtime.GOOS, runtime.GOARCH)
+		if err != nil {
+			return err
 		}
-		// The manifest may be temporarily unavailable while a release is being
-		// published. The public CNB releases page remains a safe fallback.
-		return s.App.Browser.OpenURL(provider.releasesPageURL())
+		if update == nil {
+			return nil
+		}
+		path, err := provider.downloadInstaller(ctx, update)
+		if err != nil {
+			return err
+		}
+		if err := launchSystemInstaller(runtime.GOOS, path); err != nil {
+			return err
+		}
+		return nil
 	}
+
 	if !s.updating.CompareAndSwap(false, true) {
 		return errors.New("更新流程正在进行，请查看更新窗口")
 	}
@@ -91,15 +107,15 @@ func updateInstallHint() string {
 	return systemInstallHint(runtime.GOOS, executable, appConfig.BinaryName)
 }
 
-// System installers own these paths. Upgrade through the installer so package
-// receipts, permissions and application contents stay consistent.
+// System installers own these paths. The app downloads the matching installer
+// from CNB and launches the native package installer instead of opening a web page.
 func systemInstallHint(platform, executable, binaryName string) string {
 	executable = filepath.ToSlash(executable)
 	if platform == "linux" && executable == "/usr/bin/"+binaryName {
-		return "通过 DEB 安装的版本，请下载新版 .deb 安装升级。"
+		return "通过 DEB 安装；发现新版本后将直接下载 .deb 并打开系统安装器。"
 	}
 	if platform == "darwin" && strings.HasPrefix(executable, "/Applications/") && strings.Contains(executable, ".app/Contents/MacOS/") {
-		return "应用程序目录中的版本，请下载新版 .pkg 安装升级。"
+		return "安装在 Applications；发现新版本后将直接下载 .pkg 并打开系统安装器。"
 	}
 	return ""
 }
