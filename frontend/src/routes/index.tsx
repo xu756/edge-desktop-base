@@ -109,7 +109,7 @@ function Home() {
   const checkUpdate = async () => {
     setSaving('update')
     try {
-      setNotice(state?.updateInstallHint ? '正在打开版本下载页面，请选择对应系统和架构的安装包' : '正在打开更新窗口…')
+      setNotice(state?.updateInstallHint ? '正在打开 CNB 版本下载页面，请选择对应系统和架构的安装包' : '正在打开更新窗口…')
       await DesktopService.CheckForUpdates()
     } catch (error) {
       setNotice(errorMessage(error))
@@ -213,12 +213,12 @@ function Home() {
               <Download className='size-4' />
               自动更新
             </CardTitle>
-            <CardDescription>{state?.updateInstallHint || 'GitHub Releases + SHA256SUMS。'}</CardDescription>
+            <CardDescription>{state?.updateInstallHint || 'CNB 公共分发仓库 + SHA-256 校验。'}</CardDescription>
           </CardHeader>
           <CardContent>
             <InfoRow label='当前版本' value={state ? `v${state.version}` : '-'} />
             <InfoRow label='自动检查' value={state ? (state.updateIntervalHours > 0 ? `每 ${state.updateIntervalHours} 小时` : '已关闭') : '-'} />
-            <InfoRow label='更新源' value={state?.updateRepository ?? '-'} />
+            <InfoRow label='更新源' value={state?.updateRepositoryURL ?? '-'} />
             <Button onClick={checkUpdate} disabled={loading || saving !== null} className='w-fit'>
               {saving === 'update' ? (
                 <LoaderCircle className='animate-spin' data-icon='inline-start' />
