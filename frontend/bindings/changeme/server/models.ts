@@ -16,7 +16,7 @@ export interface DesktopState {
     "autoStartError"?: string;
     "closeToTray": boolean;
     "trayReady": boolean;
-    "updateRepository": string;
+    "updateRepositoryURL": string;
     "updateInstallHint"?: string;
     "updateIntervalHours": number;
     "localServer": LocalServerStatus;
