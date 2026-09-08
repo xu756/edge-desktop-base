@@ -34,17 +34,13 @@ func (s *Server) StartUpdateCfg() error {
 	if err != nil {
 		return err
 	}
-	interval := s.updateInterval()
-	wailsInterval := interval
-	if updateInstallHint() != "" {
-		// System-installed DEB/PKG builds use their package manager instead of
-		// Wails' binary swap, but still keep the same configured polling interval.
-		wailsInterval = 0
-	}
 	if err := s.App.Updater.Init(updater.Config{
 		CurrentVersion: Version,
 		Providers:      []updater.Provider{provider},
-		CheckInterval:  wailsInterval,
+		// Periodic updates are orchestrated by this application so both portable
+		// binaries and system-installed DEB/PKG builds follow the same automatic
+		// install + restart policy.
+		CheckInterval: 0,
 		Window: &updater.BuiltinWindow{
 			HTML: strings.ReplaceAll(updaterWindowHTML, "{{APP_NAME}}", html.EscapeString(AppName)),
 			Options: updater.WindowOptions{
@@ -58,13 +54,13 @@ func (s *Server) StartUpdateCfg() error {
 	}); err != nil {
 		return err
 	}
-	if updateInstallHint() != "" && interval > 0 {
-		go s.systemPackageUpdateLoop(interval)
+	if interval := s.updateInterval(); interval > 0 {
+		go s.automaticUpdateLoop(interval)
 	}
 	return nil
 }
 
-func (s *Server) systemPackageUpdateLoop(interval time.Duration) {
+func (s *Server) automaticUpdateLoop(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -75,16 +71,34 @@ func (s *Server) systemPackageUpdateLoop(interval time.Duration) {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		err := s.installLatestSystemPackage(ctx)
+		err := s.performAutomaticUpdate(ctx)
 		cancel()
 		s.updating.Store(false)
 		if err != nil && s.App != nil {
-			s.App.Logger.Error("automatic system update", "error", err)
+			s.App.Logger.Error("automatic update", "error", err)
 		}
 		if s.quitting.Load() {
 			return
 		}
 	}
+}
+
+func (s *Server) performAutomaticUpdate(ctx context.Context) error {
+	if updateInstallHint() != "" {
+		return s.installLatestSystemPackage(ctx)
+	}
+
+	release, err := s.App.Updater.Check(ctx)
+	if err != nil || release == nil {
+		return err
+	}
+	if err := s.App.Updater.DownloadAndInstall(ctx); err != nil {
+		return err
+	}
+	if s.App.Updater.State() != updater.StateReady {
+		return errors.New("update downloaded but updater is not ready to restart")
+	}
+	return s.App.Updater.Restart(ctx)
 }
 
 func (s *Server) installLatestSystemPackage(ctx context.Context) error {
@@ -132,24 +146,29 @@ func (s *Server) CheckForUpdates() error {
 	if s.App == nil {
 		return errors.New("application is not ready")
 	}
+	if !s.updating.CompareAndSwap(false, true) {
+		return errors.New("更新流程正在进行")
+	}
 
 	if updateInstallHint() != "" {
-		if !s.updating.CompareAndSwap(false, true) {
-			return errors.New("更新流程正在进行")
-		}
 		defer s.updating.Store(false)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 		return s.installLatestSystemPackage(ctx)
 	}
 
-	if !s.updating.CompareAndSwap(false, true) {
-		return errors.New("更新流程正在进行，请查看更新窗口")
-	}
 	go func() {
 		defer s.updating.Store(false)
-		if err := s.App.Updater.CheckAndInstall(context.Background()); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		if err := s.App.Updater.CheckAndInstall(ctx); err != nil {
 			s.App.Logger.Error("update", "error", err)
+			return
+		}
+		if s.App.Updater.State() == updater.StateReady {
+			if err := s.App.Updater.Restart(ctx); err != nil {
+				s.App.Logger.Error("restart after update", "error", err)
+			}
 		}
 	}()
 	return nil
@@ -166,10 +185,10 @@ func updateInstallHint() string {
 func systemInstallHint(platform, executable, binaryName string) string {
 	executable = filepath.ToSlash(executable)
 	if platform == "linux" && executable == "/usr/bin/"+binaryName {
-		return "DEB 安装版；发现新版本后会自动下载、请求系统授权、安装并重启应用。"
+		return "DEB 安装版；新版本会自动下载，系统授权后完成安装并自动重启。"
 	}
 	if platform == "darwin" && strings.HasPrefix(executable, "/Applications/") && strings.Contains(executable, ".app/Contents/MacOS/") {
-		return "PKG 安装版；发现新版本后会自动下载、请求系统授权、安装并重启应用。"
+		return "PKG 安装版；新版本会自动下载，系统授权后完成安装并自动重启。"
 	}
 	return ""
 }
