@@ -5,9 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"html"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -37,9 +34,8 @@ func (s *Server) StartUpdateCfg() error {
 	if err := s.App.Updater.Init(updater.Config{
 		CurrentVersion: Version,
 		Providers:      []updater.Provider{provider},
-		// Periodic updates are orchestrated by this application so both portable
-		// binaries and system-installed DEB/PKG builds follow the same automatic
-		// install + restart policy.
+		// The application owns the polling loop so Linux /usr/bin installs can
+		// use the same CNB runtime artifact with one privilege-escalated swap.
 		CheckInterval: 0,
 		Window: &updater.BuiltinWindow{
 			HTML: strings.ReplaceAll(updaterWindowHTML, "{{APP_NAME}}", html.EscapeString(AppName)),
@@ -84,8 +80,8 @@ func (s *Server) automaticUpdateLoop(interval time.Duration) {
 }
 
 func (s *Server) performAutomaticUpdate(ctx context.Context) error {
-	if updateInstallHint() != "" {
-		return s.installLatestSystemPackage(ctx)
+	if needsPrivilegedRuntimeUpdate() {
+		return s.performPrivilegedRuntimeUpdate(ctx)
 	}
 
 	release, err := s.App.Updater.Check(ctx)
@@ -101,47 +97,6 @@ func (s *Server) performAutomaticUpdate(ctx context.Context) error {
 	return s.App.Updater.Restart(ctx)
 }
 
-func (s *Server) installLatestSystemPackage(ctx context.Context) error {
-	provider, err := configuredCNBProvider()
-	if err != nil {
-		return err
-	}
-	update, err := provider.checkInstallerUpdate(ctx, Version, runtime.GOOS, runtime.GOARCH)
-	if err != nil {
-		return err
-	}
-	if update == nil {
-		return nil
-	}
-
-	path, err := provider.downloadInstaller(ctx, update)
-	if err != nil {
-		return err
-	}
-	removeInstaller := true
-	defer func() {
-		if removeInstaller {
-			_ = os.Remove(path)
-		}
-	}()
-
-	if err := installSystemPackage(path); err != nil {
-		return err
-	}
-
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if err := scheduleSystemAppRestart(executable); err != nil {
-		return err
-	}
-	_ = os.Remove(path)
-	removeInstaller = false
-	s.Quit()
-	return nil
-}
-
 func (s *Server) CheckForUpdates() error {
 	if s.App == nil {
 		return errors.New("application is not ready")
@@ -150,11 +105,11 @@ func (s *Server) CheckForUpdates() error {
 		return errors.New("更新流程正在进行")
 	}
 
-	if updateInstallHint() != "" {
+	if needsPrivilegedRuntimeUpdate() {
 		defer s.updating.Store(false)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-		return s.installLatestSystemPackage(ctx)
+		return s.performPrivilegedRuntimeUpdate(ctx)
 	}
 
 	go func() {
@@ -175,20 +130,5 @@ func (s *Server) CheckForUpdates() error {
 }
 
 func updateInstallHint() string {
-	executable, err := os.Executable()
-	if err != nil {
-		return ""
-	}
-	return systemInstallHint(runtime.GOOS, executable, appConfig.BinaryName)
-}
-
-func systemInstallHint(platform, executable, binaryName string) string {
-	executable = filepath.ToSlash(executable)
-	if platform == "linux" && executable == "/usr/bin/"+binaryName {
-		return "DEB 安装版；新版本会自动下载，系统授权后完成安装并自动重启。"
-	}
-	if platform == "darwin" && strings.HasPrefix(executable, "/Applications/") && strings.Contains(executable, ".app/Contents/MacOS/") {
-		return "PKG 安装版；新版本会自动下载，系统授权后完成安装并自动重启。"
-	}
-	return ""
+	return privilegedRuntimeUpdateHint()
 }
