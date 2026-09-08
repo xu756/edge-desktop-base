@@ -33,7 +33,7 @@ func (s *Server) StartUpdateCfg() error {
 	if err != nil {
 		return err
 	}
-	s.UpdateManager = manager
+	s.updateManager = manager
 
 	if err := s.App.Updater.Init(updater.Config{
 		CurrentVersion: Version,
@@ -87,11 +87,11 @@ func (s *Server) automaticUpdateLoop(interval time.Duration) {
 }
 
 func (s *Server) performAutomaticUpdate(ctx context.Context) error {
-	if s.UpdateManager == nil {
+	if s.updateManager == nil {
 		return errors.New("update manager is not initialised")
 	}
-	if s.UpdateManager.NeedsPrivilegedRuntimeUpdate() {
-		return s.UpdateManager.PerformPrivilegedRuntimeUpdate(ctx, s.Quit)
+	if s.updateManager.NeedsPrivilegedRuntimeUpdate() {
+		return s.updateManager.PerformPrivilegedRuntimeUpdate(ctx, s.Quit)
 	}
 
 	release, err := s.App.Updater.Check(ctx)
@@ -111,18 +111,18 @@ func (s *Server) CheckForUpdates() error {
 	if s.App == nil {
 		return errors.New("application is not ready")
 	}
-	if s.UpdateManager == nil {
+	if s.updateManager == nil {
 		return errors.New("update manager is not initialised")
 	}
 	if !s.updating.CompareAndSwap(false, true) {
 		return errors.New("更新流程正在进行")
 	}
 
-	if s.UpdateManager.NeedsPrivilegedRuntimeUpdate() {
+	if s.updateManager.NeedsPrivilegedRuntimeUpdate() {
 		defer s.updating.Store(false)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-		return s.UpdateManager.PerformPrivilegedRuntimeUpdate(ctx, s.Quit)
+		return s.updateManager.PerformPrivilegedRuntimeUpdate(ctx, s.Quit)
 	}
 
 	go func() {
@@ -143,8 +143,8 @@ func (s *Server) CheckForUpdates() error {
 }
 
 func (s *Server) updateInstallHint() string {
-	if s.UpdateManager == nil {
+	if s.updateManager == nil {
 		return ""
 	}
-	return s.UpdateManager.InstallHint()
+	return s.updateManager.InstallHint()
 }
