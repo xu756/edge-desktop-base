@@ -17,6 +17,14 @@ export function Echo(message: string): $CancellablePromise<string> {
     return $Call.ByID(3620578863, message);
 }
 
+export function SetAutoCheckUpdates(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2957917899, enabled);
+}
+
+export function SetAutoDownloadUpdates(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3871382773, enabled);
+}
+
 export function SetAutoStart(enabled: boolean): $CancellablePromise<void> {
     return $Call.ByID(351485835, enabled);
 }
